@@ -1,5 +1,4 @@
-﻿using CFramework.Core.Config;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace CFramework.Core
 {
@@ -7,7 +6,6 @@ namespace CFramework.Core
     /// CFramework 的统一配置对象。创建为 ScriptableObject 资产后，
     /// 在场景入口组件中引用该配置即可完成框架初始化配置。
     /// </summary>
-    [AutoConfig("CFrameworkConfig")]
     public class CFrameworkConfig : ScriptableObject
     {
         [Header("Tag命名"), Space] public TagConfigSection tagConfig = new TagConfigSection();

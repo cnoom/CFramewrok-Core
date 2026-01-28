@@ -14,6 +14,7 @@ namespace CFramework.Core.Editor.EditorFramework
         [MenuItem(CFMenuKey.Base + "/重新执行框架初始化")]
         private static void RetryFrameworkInitialize()
         {
+            ConfigUtility.ClearEditorCache();
             TryFrameworkInitialize(true);
         }
 
@@ -42,10 +43,10 @@ namespace CFramework.Core.Editor.EditorFramework
             var config = ConfigUtility.GetEditorConfig<CFrameworkEditorConfig>();
             if (!config.isInitialized || force)
             {
-                EditorModuleManager.Instance.CallFrameworkInitialize();
                 config.isInitialized = true;
                 EditorUtility.SetDirty(config);
                 AssetDatabase.SaveAssetIfDirty(config);
+                EditorModuleManager.Instance.CallFrameworkInitialize();
             }
         }
 
