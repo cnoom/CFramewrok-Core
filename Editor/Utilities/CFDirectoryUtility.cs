@@ -30,6 +30,7 @@ namespace CFramework.Core.Editor.Utilities
                         EditorLogUtility.LogError($"创建文件夹失败: {nextPath}");
                         return;
                     }
+                    AssetDatabase.Refresh();        
                 }
 
                 currentPath = nextPath;
