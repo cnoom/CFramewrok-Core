@@ -10,7 +10,7 @@ namespace CFramework.Core.ModuleSystem
         /// </summary>
         public struct ModuleRegister : IBroadcastData
         {
-            public Type ModuleType;
+            public Type ModuleType { get; private set; }
             public ModuleRegister(Type moduleType) => ModuleType = moduleType;
         }
 
@@ -19,7 +19,7 @@ namespace CFramework.Core.ModuleSystem
         /// </summary>
         public struct ModuleUnregister : IBroadcastData
         {
-            public Type ModuleType;
+            public Type ModuleType { get; private set; }
             public ModuleUnregister(Type moduleType) => ModuleType = moduleType;
         }
 
