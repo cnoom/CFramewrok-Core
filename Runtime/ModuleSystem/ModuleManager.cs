@@ -172,6 +172,8 @@ namespace CFramework.Core.ModuleSystem
             // ReSharper disable SuspiciousTypeConversion.Global
             if (module is IRegister register) register.Register();
             if (module is IRegisterAsync registerAsync) await registerAsync.RegisterAsync(CF.CancellationToken);
+
+            await CF.Broadcast(new ModuleManageBroadcasts.ModuleRegister(type));
         }
 
         private async UniTask<bool> UnregisterModuleAsync(Type moduleType, CancellationToken cancellationToken)
@@ -202,6 +204,7 @@ namespace CFramework.Core.ModuleSystem
             if (module is IDisposable disposable) disposable.Dispose();
 
             _logger.LogInfo($"卸载模块 {module.GetType().Name}。");
+            await CF.Broadcast(new ModuleManageBroadcasts.ModuleUnregister(moduleType));
             return true;
         }
 
@@ -326,6 +329,8 @@ namespace CFramework.Core.ModuleSystem
                     Debug.LogError($"创建模块 [{moduleType.Name}] 的实例失败: {ex.Message}");
                 }
             }
+
+            await CF.Broadcast(new ModuleManageBroadcasts.AutoModuleDiscoveryComplete());
         }
 
         /// <summary>
