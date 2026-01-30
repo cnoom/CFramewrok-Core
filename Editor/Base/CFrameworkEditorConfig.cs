@@ -19,5 +19,8 @@ namespace CFramework.Core.Editor.Base
 
         [Header("日志配置")] [Tooltip("日志输出最低等级")]
         public LogLevel minLogLevel = LogLevel.Info;
+        
+        [Tooltip("运行时是否输出日志")]
+        public bool runtimeLog = true;
     }
 }

@@ -59,6 +59,9 @@ namespace CFramework.Core
             var effectiveLoggerOptions = loggerOptions ?? new LoggerBootstrapOptions();
             LogManager.CFLogger.SetEnabled(
                 effectiveLoggerOptions.DefaultEnabled && effectiveLoggerOptions.GlobalEnabled);
+            
+            LogManager.CFLogger.LogDebug("初始化CF...");
+
 
             var exec = executionOptions ?? new CFExecutionOptions();
             BroadcastManager =
@@ -80,9 +83,6 @@ namespace CFramework.Core
                     LogManager.Create(tagConfig.ModuleManagerTag,
                         effectiveLoggerOptions.GlobalEnabled && effectiveLoggerOptions.ModuleEnabled),
                     discoverOptions ?? new ModuleDiscoverOptions());
-
-            // 构造完成后再输出初始化日志，已受启用/禁用控制
-            LogManager.CFLogger.LogDebug("初始化CF...");
         }
 
         public void Update() => ModuleManager.Update();

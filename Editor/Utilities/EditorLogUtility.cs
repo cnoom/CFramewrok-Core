@@ -1,4 +1,5 @@
 ﻿using CFramework.Core.Editor.Base;
+using UnityEditor;
 using UnityEngine;
 
 namespace CFramework.Core.Editor.Utilities
@@ -78,7 +79,10 @@ namespace CFramework.Core.Editor.Utilities
             var config = ConfigUtility.GetEditorConfig<CFrameworkEditorConfig>();
             if (config == null)
                 return true;
-
+            if (!config.runtimeLog && EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return false;
+            }
             // 检查日志等级
             return level >= config.minLogLevel;
         }
