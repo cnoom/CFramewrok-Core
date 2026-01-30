@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using CFramework.Core.Editor.Base;
+using UnityEngine;
 
 namespace CFramework.Core.Editor.Utilities
 {
@@ -26,6 +27,8 @@ namespace CFramework.Core.Editor.Utilities
         /// </summary>
         public static void LogInfo(string message, string tag = null)
         {
+            if (!ShouldLog(LogLevel.Info))
+                return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, InfoLevelName, InfoColor);
             Debug.Log(formatted);
@@ -36,6 +39,8 @@ namespace CFramework.Core.Editor.Utilities
         /// </summary>
         public static void LogDebug(string message, string tag = null)
         {
+            if (!ShouldLog(LogLevel.Debug))
+                return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, DebugLevelName, DebugColor);
             Debug.Log(formatted);
@@ -46,6 +51,8 @@ namespace CFramework.Core.Editor.Utilities
         /// </summary>
         public static void LogWarning(string message, string tag = null)
         {
+            if (!ShouldLog(LogLevel.Warning))
+                return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, WarningLevelName, WarningColor);
             Debug.LogWarning(formatted);
@@ -56,9 +63,24 @@ namespace CFramework.Core.Editor.Utilities
         /// </summary>
         public static void LogError(string message, string tag = null)
         {
+            if (!ShouldLog(LogLevel.Error))
+                return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, ErrorLevelName, ErrorColor);
             Debug.LogError(formatted);
+        }
+
+        /// <summary>
+        /// 判断是否应该输出日志
+        /// </summary>
+        private static bool ShouldLog(LogLevel level)
+        {
+            var config = ConfigUtility.GetEditorConfig<CFrameworkEditorConfig>();
+            if (config == null)
+                return true;
+
+            // 检查日志等级
+            return level >= config.minLogLevel;
         }
 
         /// <summary>
