@@ -1,7 +1,7 @@
 ﻿using System;
 using UnityEngine;
 
-namespace CFramework.Core.com.cnoom.cframework.core.Runtime.Utilities
+namespace CFramework.Core.Utilities
 {
     public class HandlerMonobehaviour : MonoBehaviour
     {
