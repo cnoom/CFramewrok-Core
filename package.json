@@ -2,7 +2,7 @@
   "name": "com.cnoom.cframework.core",
   "displayName": "CFramework-Core",
   "version": "1.0.0",
-  "description": "一个个人使用的unity游戏框架,专注于事件系统和模块化架构。",
+  "description": "一个轻量的unity游戏框架,专注于事件系统和模块化架构。",
   "unity": "2021.3",
   "unityRelease": "0f1",
   "dependencies": {
