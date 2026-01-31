@@ -40,7 +40,7 @@ namespace CFramework.Core.Editor.EditorFramework
 
         private static void TryFrameworkInitialize(bool force = false)
         {
-            var config = ConfigUtility.GetEditorConfig<CFrameworkEditorConfig>();
+            var config = ConfigUtility.GetOrCreateEditorConfig<CFrameworkEditorConfig>();
             if (!config.isInitialized || force)
             {
                 config.isInitialized = true;

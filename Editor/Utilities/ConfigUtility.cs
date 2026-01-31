@@ -22,15 +22,31 @@ namespace CFramework.Core.Editor.Utilities
         /// <summary>
         /// 获取编辑器配置，自动创建
         /// </summary>
+        public static T GetOrCreateEditorConfig<T>() where T : ScriptableObject
+        {
+            var config = GetEditorConfig<T>();
+
+            if(!config)
+            {
+                config = CreateEditorConfig<T>(true);
+            }
+            if(config)
+            {
+                EditorCache[typeof(T)] = config;
+            }
+            return config;
+        }
+
+        /// <summary>
+        /// 获取存在的编辑器配置
+        /// </summary>
         public static T GetEditorConfig<T>() where T : ScriptableObject
         {
             var type = typeof(T);
-
-            if (EditorCache.TryGetValue(type, out var cached))
+            if(EditorCache.TryGetValue(type, out var cached))
                 return (T)cached;
-
             var attr = type.GetCustomAttribute<EditorConfigAttribute>();
-            if (attr == null)
+            if(attr == null)
             {
                 Debug.LogError($"配置类型 [{type.FullName}] 未标记 [EditorConfig] 特性");
                 return null;
@@ -38,35 +54,53 @@ namespace CFramework.Core.Editor.Utilities
 
             string fileName = string.IsNullOrEmpty(attr.FileName) ? type.Name : attr.FileName;
             string folder = CFDirectoryKey.FrameworkEditorConfig;
-            if (!string.IsNullOrEmpty(attr.SubFolder))
+            if(!string.IsNullOrEmpty(attr.SubFolder))
             {
                 folder = Path.Combine(folder, attr.SubFolder).Replace("\\", "/");
             }
             CFDirectoryUtility.EnsureFolder(folder);
-            
+
             string assetPath = $"{folder}/{fileName}.asset";
 
-            var config = AssetDatabase.LoadAssetAtPath<T>(assetPath);
+            return AssetDatabase.LoadAssetAtPath<T>(assetPath);
+        }
 
-            if (config == null)
+        /// <summary>
+        /// 创建编辑器配置
+        /// </summary>
+        public static T CreateEditorConfig<T>() where T : ScriptableObject
+        {
+            return CreateEditorConfig<T>(false);
+        }
+        
+        /// <summary>
+        /// 创建编辑器配置
+        /// </summary>
+        /// <param name="fromAutoCreate">来源为自动创建</param>
+        public static T CreateEditorConfig<T>(bool fromAutoCreate) where T : ScriptableObject
+        {
+            var type = typeof(T);
+            var attr = type.GetCustomAttribute<EditorConfigAttribute>();
+            if(attr == null)
             {
-                if (attr.AutoCreate)
-                {
-                    config = CreateConfigAsset<T>(assetPath);
-                }
-                else if (attr.Required)
-                {
-                    Debug.LogError($"必需的编辑器配置不存在: {assetPath}");
-                    return null;
-                }
+                Debug.LogError($"配置类型 [{type.FullName}] 未标记 [EditorConfig] 特性");
+                return null;
             }
-
-            if (config != null)
+            if(fromAutoCreate && !attr.AutoCreate)
             {
-                EditorCache[type] = config;
+                return null;
             }
+            string fileName = string.IsNullOrEmpty(attr.FileName) ? type.Name : attr.FileName;
+            string folder = CFDirectoryKey.FrameworkEditorConfig;
+            if(!string.IsNullOrEmpty(attr.SubFolder))
+            {
+                folder = Path.Combine(folder, attr.SubFolder).Replace("\\", "/");
+            }
+            CFDirectoryUtility.EnsureFolder(folder);
 
-            return config;
+            string assetPath = $"{folder}/{fileName}.asset";
+
+            return CreateConfigAsset<T>(assetPath);
         }
 
         /// <summary>
@@ -75,7 +109,7 @@ namespace CFramework.Core.Editor.Utilities
         public static void ReloadEditorConfig<T>() where T : ScriptableObject
         {
             var type = typeof(T);
-            if (EditorCache.ContainsKey(type))
+            if(EditorCache.ContainsKey(type))
             {
                 EditorCache.Remove(type);
             }
@@ -103,7 +137,7 @@ namespace CFramework.Core.Editor.Utilities
             // 确保目录存在
             string directory = Path.GetDirectoryName(assetPath);
             CFDirectoryUtility.EnsureFolder(directory);
-            
+
             EditorLogUtility.LogInfo($"创建配置文件: {assetPath}", "Config");
             AssetDatabase.CreateAsset(config, assetPath);
             AssetDatabase.SaveAssets();
@@ -111,6 +145,7 @@ namespace CFramework.Core.Editor.Utilities
 
             return config;
         }
+
         #endregion
     }
 }
