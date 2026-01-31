@@ -8,39 +8,34 @@ using CFramework.Core.ModuleSystem;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
+using Assembly = System.Reflection.Assembly;
 
 namespace CFramework.Core.Editor.Base
 {
     [CustomEditor(typeof(CFrameworkConfig))]
     public class CFrameworkConfigEditor : UnityEditor.Editor
     {
-        private class AutoModuleInfo
-        {
-            public string ModuleTypeFullName { get; set; }
-            public string ModuleName { get; set; }
-            public string Description { get; set; }
-        }
-
-        private SerializedProperty _tagConfigProperty;
-        private SerializedProperty _loggerConfigProperty;
-        private SerializedProperty _executionConfigProperty;
-        private SerializedProperty _autoDiscoverConfigProperty;
-
-        private SerializedProperty _assemblyWhitelistProperty;
-        private SerializedProperty _autoModulesProperty;
 
         private string[] _assemblyOptions = Array.Empty<string>();
 
         private bool _assemblyScanError;
-        private bool _moduleScanError;
 
-        private List<AutoModuleInfo> _autoModuleInfos = new List<AutoModuleInfo>();
+        private SerializedProperty _assemblyWhitelistProperty;
+        private SerializedProperty _autoDiscoverConfigProperty;
+
+        private readonly List<AutoModuleInfo> _autoModuleInfos = new List<AutoModuleInfo>();
+        private SerializedProperty _autoModulesProperty;
+        private SerializedProperty _executionConfigProperty;
+
+        // 用于检测白名单是否被修改
+        private string _lastAssemblyWhitelistHash = string.Empty;
+        private SerializedProperty _loggerConfigProperty;
+        private bool _moduleScanError;
 
         // 模块配置折叠状态
         private bool _showModuleConfigs = true;
 
-        // 用于检测白名单是否被修改
-        private string _lastAssemblyWhitelistHash = string.Empty;
+        private SerializedProperty _tagConfigProperty;
 
         private void OnEnable()
         {
@@ -49,7 +44,7 @@ namespace CFramework.Core.Editor.Base
             _executionConfigProperty = serializedObject.FindProperty("executionConfig");
             _autoDiscoverConfigProperty = serializedObject.FindProperty("autoDiscoverConfig");
 
-            if (_autoDiscoverConfigProperty != null)
+            if(_autoDiscoverConfigProperty != null)
             {
                 _assemblyWhitelistProperty = _autoDiscoverConfigProperty.FindPropertyRelative("assemblyWhitelist");
                 _autoModulesProperty = _autoDiscoverConfigProperty.FindPropertyRelative("autoModules");
@@ -63,17 +58,17 @@ namespace CFramework.Core.Editor.Base
         }
 
         /// <summary>
-        /// 计算白名单内容的哈希值，用于检测内容变化
+        ///     计算白名单内容的哈希值，用于检测内容变化
         /// </summary>
         private string CalculateAssemblyWhitelistHash()
         {
-            if (_assemblyWhitelistProperty == null || _assemblyWhitelistProperty.arraySize == 0)
+            if(_assemblyWhitelistProperty == null || _assemblyWhitelistProperty.arraySize == 0)
             {
                 return "empty";
             }
 
-            var items = new List<string>();
-            for (int i = 0; i < _assemblyWhitelistProperty.arraySize; i++)
+            List<string> items = new List<string>();
+            for(var i = 0; i < _assemblyWhitelistProperty.arraySize; i++)
             {
                 items.Add(_assemblyWhitelistProperty.GetArrayElementAtIndex(i).stringValue);
             }
@@ -86,25 +81,25 @@ namespace CFramework.Core.Editor.Base
         {
             serializedObject.Update();
 
-            if (_tagConfigProperty != null)
+            if(_tagConfigProperty != null)
             {
                 EditorGUILayout.PropertyField(_tagConfigProperty, true);
                 EditorGUILayout.Space();
             }
 
-            if (_loggerConfigProperty != null)
+            if(_loggerConfigProperty != null)
             {
                 EditorGUILayout.PropertyField(_loggerConfigProperty, true);
                 EditorGUILayout.Space();
             }
 
-            if (_executionConfigProperty != null)
+            if(_executionConfigProperty != null)
             {
                 EditorGUILayout.PropertyField(_executionConfigProperty, true);
                 EditorGUILayout.Space();
             }
 
-            if (_autoDiscoverConfigProperty != null)
+            if(_autoDiscoverConfigProperty != null)
             {
                 DrawAutoDiscoverSection();
             }
@@ -113,28 +108,28 @@ namespace CFramework.Core.Editor.Base
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("刷新程序集列表", GUILayout.Height(22)))
+                if(GUILayout.Button("刷新程序集列表", GUILayout.Height(22)))
                 {
                     BuildAssemblyCache();
                 }
 
-                if (GUILayout.Button("扫描自动模块", GUILayout.Height(22)))
+                if(GUILayout.Button("扫描自动模块", GUILayout.Height(22)))
                 {
                     ScanAutoModules();
                 }
 
-                if (GUILayout.Button("重置为默认 Inspector", GUILayout.Height(22)))
+                if(GUILayout.Button("重置为默认 Inspector", GUILayout.Height(22)))
                 {
                     DrawDefaultInspector();
                 }
             }
 
             // 检测白名单是否被修改，如果修改则自动重新扫描模块
-            bool whitelistChanged = false;
-            if (_assemblyWhitelistProperty != null)
+            var whitelistChanged = false;
+            if(_assemblyWhitelistProperty != null)
             {
                 string currentHash = CalculateAssemblyWhitelistHash();
-                if (currentHash != _lastAssemblyWhitelistHash)
+                if(currentHash != _lastAssemblyWhitelistHash)
                 {
                     _lastAssemblyWhitelistHash = currentHash;
                     whitelistChanged = true;
@@ -144,7 +139,7 @@ namespace CFramework.Core.Editor.Base
             serializedObject.ApplyModifiedProperties();
 
             // 在应用修改后扫描模块
-            if (whitelistChanged)
+            if(whitelistChanged)
             {
                 ScanAutoModules();
             }
@@ -158,13 +153,13 @@ namespace CFramework.Core.Editor.Base
             DrawAssemblyWhitelistSection();
             DrawAutoModulesSection();
 
-            if (_assemblyScanError)
+            if(_assemblyScanError)
             {
                 EditorGUILayout.Space();
                 EditorGUILayout.HelpBox("扫描程序集时出现错误，已尽量收集可用项。若列表明显不完整，可点击上方按钮重新刷新。", MessageType.Warning);
             }
 
-            if (_moduleScanError)
+            if(_moduleScanError)
             {
                 EditorGUILayout.Space();
                 EditorGUILayout.HelpBox("扫描自动模块时出现错误，已尽量收集可用项。请点击\"扫描自动模块\"按钮重新扫描。", MessageType.Warning);
@@ -176,7 +171,7 @@ namespace CFramework.Core.Editor.Base
         private void DrawAssemblyWhitelistSection()
         {
 
-            if (_assemblyWhitelistProperty == null)
+            if(_assemblyWhitelistProperty == null)
             {
                 EditorGUILayout.HelpBox("程序集白名单配置未找到。", MessageType.Error);
                 return;
@@ -185,7 +180,7 @@ namespace CFramework.Core.Editor.Base
             EditorGUILayout.LabelField("程序集白名单", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
 
-            if (_assemblyOptions == null || _assemblyOptions.Length == 0)
+            if(_assemblyOptions == null || _assemblyOptions.Length == 0)
             {
                 EditorGUILayout.HelpBox("未能找到可用程序集，请点击\"刷新程序集列表\"按钮。", MessageType.Warning);
                 EditorGUILayout.PropertyField(_assemblyWhitelistProperty, GUIContent.none, true);
@@ -202,9 +197,9 @@ namespace CFramework.Core.Editor.Base
 
             EditorGUILayout.Space(4);
 
-            for (int i = 0; i < _assemblyWhitelistProperty.arraySize; i++)
+            for(var i = 0; i < _assemblyWhitelistProperty.arraySize; i++)
             {
-                var elementProperty = _assemblyWhitelistProperty.GetArrayElementAtIndex(i);
+                SerializedProperty elementProperty = _assemblyWhitelistProperty.GetArrayElementAtIndex(i);
                 DrawAssemblyElement(elementProperty, i);
             }
 
@@ -214,17 +209,17 @@ namespace CFramework.Core.Editor.Base
 
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(EditorGUI.indentLevel * 15);
-            if (GUILayout.Button("清空白名单", GUILayout.Width(100)))
+            if(GUILayout.Button("清空白名单", GUILayout.Width(100)))
             {
                 _assemblyWhitelistProperty.ClearArray();
             }
-            if (GUILayout.Button("添加所有程序集", GUILayout.Width(120)))
+            if(GUILayout.Button("添加所有程序集", GUILayout.Width(120)))
             {
                 _assemblyWhitelistProperty.ClearArray();
-                for (int i = 0; i < _assemblyOptions.Length; i++)
+                for(var i = 0; i < _assemblyOptions.Length; i++)
                 {
                     _assemblyWhitelistProperty.InsertArrayElementAtIndex(i);
-                    var element = _assemblyWhitelistProperty.GetArrayElementAtIndex(i);
+                    SerializedProperty element = _assemblyWhitelistProperty.GetArrayElementAtIndex(i);
                     element.stringValue = _assemblyOptions[i];
                 }
             }
@@ -235,7 +230,7 @@ namespace CFramework.Core.Editor.Base
 
         private void DrawAssemblyElement(SerializedProperty elementProperty, int index)
         {
-            if (elementProperty == null) return;
+            if(elementProperty == null) return;
 
             string currentValue = elementProperty.stringValue;
             int currentIndex = Array.IndexOf(_assemblyOptions, currentValue);
@@ -243,7 +238,7 @@ namespace CFramework.Core.Editor.Base
 
             EditorGUILayout.BeginHorizontal();
 
-            if (hasCustomValue)
+            if(hasCustomValue)
             {
                 using (new EditorGUI.DisabledScope(true))
                 {
@@ -257,7 +252,7 @@ namespace CFramework.Core.Editor.Base
                 elementProperty.stringValue = _assemblyOptions[newIndex];
             }
 
-            if (GUILayout.Button("删除", GUILayout.Width(50)))
+            if(GUILayout.Button("删除", GUILayout.Width(50)))
             {
                 _assemblyWhitelistProperty.DeleteArrayElementAtIndex(index);
             }
@@ -269,11 +264,11 @@ namespace CFramework.Core.Editor.Base
         {
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(EditorGUI.indentLevel * 15);
-            if (GUILayout.Button("添加程序集", GUILayout.Width(100)))
+            if(GUILayout.Button("添加程序集", GUILayout.Width(100)))
             {
                 int newIndex = _assemblyWhitelistProperty.arraySize;
                 _assemblyWhitelistProperty.InsertArrayElementAtIndex(newIndex);
-                var newElement = _assemblyWhitelistProperty.GetArrayElementAtIndex(newIndex);
+                SerializedProperty newElement = _assemblyWhitelistProperty.GetArrayElementAtIndex(newIndex);
                 newElement.stringValue = _assemblyOptions.Length > 0 ? _assemblyOptions[0] : string.Empty;
             }
             EditorGUILayout.EndHorizontal();
@@ -281,7 +276,7 @@ namespace CFramework.Core.Editor.Base
 
         private void DrawAutoModulesSection()
         {
-            if (_autoModulesProperty == null)
+            if(_autoModulesProperty == null)
             {
                 return;
             }
@@ -291,14 +286,14 @@ namespace CFramework.Core.Editor.Base
             // 折叠标题
             _showModuleConfigs = EditorGUILayout.Foldout(_showModuleConfigs, "自动模块配置", true, EditorStyles.boldLabel);
 
-            if (!_showModuleConfigs)
+            if(!_showModuleConfigs)
             {
                 return;
             }
 
             EditorGUI.indentLevel++;
 
-            if (_autoModuleInfos.Count == 0)
+            if(_autoModuleInfos.Count == 0)
             {
                 EditorGUILayout.HelpBox("未找到自动模块。请点击\"扫描自动模块\"按钮重新扫描。", MessageType.Info);
                 EditorGUI.indentLevel--;
@@ -308,12 +303,12 @@ namespace CFramework.Core.Editor.Base
             EditorGUILayout.HelpBox($"已发现 {_autoModuleInfos.Count} 个自动模块。勾选启用对应模块。", MessageType.Info);
             EditorGUILayout.Space();
 
-            foreach (var moduleInfo in _autoModuleInfos)
+            foreach (AutoModuleInfo moduleInfo in _autoModuleInfos)
             {
                 bool currentValue = GetModuleEnabled(moduleInfo.ModuleTypeFullName, true);
                 bool newValue = EditorGUILayout.Toggle(new GUIContent(moduleInfo.ModuleName, moduleInfo.Description), currentValue);
 
-                if (newValue != currentValue)
+                if(newValue != currentValue)
                 {
                     SetModuleEnabled(moduleInfo.ModuleTypeFullName, newValue);
                 }
@@ -325,16 +320,16 @@ namespace CFramework.Core.Editor.Base
 
         private bool GetModuleEnabled(string moduleTypeFullName, bool defaultValue)
         {
-            if (_autoModulesProperty == null || string.IsNullOrEmpty(moduleTypeFullName))
+            if(_autoModulesProperty == null || string.IsNullOrEmpty(moduleTypeFullName))
                 return defaultValue;
 
-            for (int i = 0; i < _autoModulesProperty.arraySize; i++)
+            for(var i = 0; i < _autoModulesProperty.arraySize; i++)
             {
-                var element = _autoModulesProperty.GetArrayElementAtIndex(i);
-                var typeProperty = element.FindPropertyRelative("moduleTypeFullName");
-                var enabledProperty = element.FindPropertyRelative("enabled");
+                SerializedProperty element = _autoModulesProperty.GetArrayElementAtIndex(i);
+                SerializedProperty typeProperty = element.FindPropertyRelative("moduleTypeFullName");
+                SerializedProperty enabledProperty = element.FindPropertyRelative("enabled");
 
-                if (typeProperty != null && typeProperty.stringValue == moduleTypeFullName)
+                if(typeProperty != null && typeProperty.stringValue == moduleTypeFullName)
                 {
                     return enabledProperty != null ? enabledProperty.boolValue : defaultValue;
                 }
@@ -345,18 +340,18 @@ namespace CFramework.Core.Editor.Base
 
         private void SetModuleEnabled(string moduleTypeFullName, bool enabled)
         {
-            if (_autoModulesProperty == null || string.IsNullOrEmpty(moduleTypeFullName))
+            if(_autoModulesProperty == null || string.IsNullOrEmpty(moduleTypeFullName))
                 return;
 
-            for (int i = 0; i < _autoModulesProperty.arraySize; i++)
+            for(var i = 0; i < _autoModulesProperty.arraySize; i++)
             {
-                var element = _autoModulesProperty.GetArrayElementAtIndex(i);
-                var typeProperty = element.FindPropertyRelative("moduleTypeFullName");
+                SerializedProperty element = _autoModulesProperty.GetArrayElementAtIndex(i);
+                SerializedProperty typeProperty = element.FindPropertyRelative("moduleTypeFullName");
 
-                if (typeProperty != null && typeProperty.stringValue == moduleTypeFullName)
+                if(typeProperty != null && typeProperty.stringValue == moduleTypeFullName)
                 {
-                    var enabledProperty = element.FindPropertyRelative("enabled");
-                    if (enabledProperty != null)
+                    SerializedProperty enabledProperty = element.FindPropertyRelative("enabled");
+                    if(enabledProperty != null)
                     {
                         enabledProperty.boolValue = enabled;
                     }
@@ -367,7 +362,7 @@ namespace CFramework.Core.Editor.Base
             // 如果不存在，添加新配置
             int newIndex = _autoModulesProperty.arraySize;
             _autoModulesProperty.InsertArrayElementAtIndex(newIndex);
-            var newElement = _autoModulesProperty.GetArrayElementAtIndex(newIndex);
+            SerializedProperty newElement = _autoModulesProperty.GetArrayElementAtIndex(newIndex);
             newElement.FindPropertyRelative("moduleTypeFullName").stringValue = moduleTypeFullName;
             newElement.FindPropertyRelative("moduleName").stringValue = string.Empty; // 将在扫描时填充
             newElement.FindPropertyRelative("description").stringValue = string.Empty; // 将在扫描时填充
@@ -409,40 +404,40 @@ namespace CFramework.Core.Editor.Base
             {
                 // 获取配置中的白名单
                 string[] whitelist = null;
-                if (_assemblyWhitelistProperty != null && _assemblyWhitelistProperty.arraySize > 0)
+                if(_assemblyWhitelistProperty != null && _assemblyWhitelistProperty.arraySize > 0)
                 {
                     whitelist = new string[_assemblyWhitelistProperty.arraySize];
-                    for (int i = 0; i < _assemblyWhitelistProperty.arraySize; i++)
+                    for(var i = 0; i < _assemblyWhitelistProperty.arraySize; i++)
                     {
                         whitelist[i] = _assemblyWhitelistProperty.GetArrayElementAtIndex(i).stringValue;
                     }
                 }
 
-                var assemblyNames = CompilationPipeline.GetAssemblies()
+                List<string> assemblyNames = CompilationPipeline.GetAssemblies()
                     .Select(a => a.name)
                     .Where(n => !IsUnityAssemblyName(n))
                     .Where(n => MatchAssemblyWhitelist(n, whitelist))
                     .ToList();
 
-                foreach (var assemblyName in assemblyNames)
+                foreach (string assemblyName in assemblyNames)
                 {
-                    var assembly = AppDomain.CurrentDomain.GetAssemblies()
+                    Assembly assembly = AppDomain.CurrentDomain.GetAssemblies()
                         .FirstOrDefault(a => a.GetName().Name == assemblyName);
 
-                    if (assembly == null) continue;
+                    if(assembly == null) continue;
 
                     try
                     {
-                        var moduleTypes = assembly.GetTypes()
+                        IEnumerable<Type> moduleTypes = assembly.GetTypes()
                             .Where(t => t.GetCustomAttribute<AutoModuleAttribute>() != null)
                             .Where(t => typeof(IModule).IsAssignableFrom(t))
                             .Where(t => !t.IsInterface && !t.IsAbstract)
                             .Where(t => t.GetConstructor(Type.EmptyTypes) != null);
 
-                        foreach (var moduleType in moduleTypes)
+                        foreach (Type moduleType in moduleTypes)
                         {
-                            var attr = moduleType.GetCustomAttribute<AutoModuleAttribute>();
-                            if (attr != null)
+                            AutoModuleAttribute attr = moduleType.GetCustomAttribute<AutoModuleAttribute>();
+                            if(attr != null)
                             {
                                 _autoModuleInfos.Add(new AutoModuleInfo
                                 {
@@ -475,13 +470,13 @@ namespace CFramework.Core.Editor.Base
 
         private void UpdateExistingModuleConfigs()
         {
-            if (_autoModulesProperty == null)
+            if(_autoModulesProperty == null)
                 return;
 
             // 如果没有扫描到模块，清空配置
-            if (_autoModuleInfos.Count == 0)
+            if(_autoModuleInfos.Count == 0)
             {
-                if (_autoModulesProperty.arraySize > 0)
+                if(_autoModulesProperty.arraySize > 0)
                 {
                     _autoModulesProperty.ClearArray();
                     serializedObject.ApplyModifiedProperties();
@@ -491,18 +486,18 @@ namespace CFramework.Core.Editor.Base
             }
 
             // 收集当前扫描到的所有模块类型全名
-            var scannedModuleTypes = new HashSet<string>(_autoModuleInfos
+            HashSet<string> scannedModuleTypes = new HashSet<string>(_autoModuleInfos
                 .Select(m => m.ModuleTypeFullName));
 
             // 删除不在当前扫描结果中的配置（倒序遍历避免索引问题）
-            for (int i = _autoModulesProperty.arraySize - 1; i >= 0; i--)
+            for(int i = _autoModulesProperty.arraySize - 1; i >= 0; i--)
             {
-                var element = _autoModulesProperty.GetArrayElementAtIndex(i);
-                var typeProperty = element.FindPropertyRelative("moduleTypeFullName");
+                SerializedProperty element = _autoModulesProperty.GetArrayElementAtIndex(i);
+                SerializedProperty typeProperty = element.FindPropertyRelative("moduleTypeFullName");
 
-                if (typeProperty != null && !string.IsNullOrEmpty(typeProperty.stringValue))
+                if(typeProperty != null && !string.IsNullOrEmpty(typeProperty.stringValue))
                 {
-                    if (!scannedModuleTypes.Contains(typeProperty.stringValue))
+                    if(!scannedModuleTypes.Contains(typeProperty.stringValue))
                     {
                         EditorLogUtility.LogInfo($"模块配置 [{typeProperty.stringValue}] 不在当前白名单范围内，已从配置中移除。", "CFramework.Module");
                         _autoModulesProperty.DeleteArrayElementAtIndex(i);
@@ -511,26 +506,26 @@ namespace CFramework.Core.Editor.Base
             }
 
             // 更新和添加新发现的模块配置
-            foreach (var moduleInfo in _autoModuleInfos)
+            foreach (AutoModuleInfo moduleInfo in _autoModuleInfos)
             {
-                bool exists = false;
-                for (int i = 0; i < _autoModulesProperty.arraySize; i++)
+                var exists = false;
+                for(var i = 0; i < _autoModulesProperty.arraySize; i++)
                 {
-                    var element = _autoModulesProperty.GetArrayElementAtIndex(i);
-                    var typeProperty = element.FindPropertyRelative("moduleTypeFullName");
+                    SerializedProperty element = _autoModulesProperty.GetArrayElementAtIndex(i);
+                    SerializedProperty typeProperty = element.FindPropertyRelative("moduleTypeFullName");
 
-                    if (typeProperty != null && typeProperty.stringValue == moduleInfo.ModuleTypeFullName)
+                    if(typeProperty != null && typeProperty.stringValue == moduleInfo.ModuleTypeFullName)
                     {
                         exists = true;
                         // 更新名称和描述（如果为空）
-                        var nameProperty = element.FindPropertyRelative("moduleName");
-                        var descProperty = element.FindPropertyRelative("description");
+                        SerializedProperty nameProperty = element.FindPropertyRelative("moduleName");
+                        SerializedProperty descProperty = element.FindPropertyRelative("description");
 
-                        if (nameProperty != null && string.IsNullOrEmpty(nameProperty.stringValue))
+                        if(nameProperty != null && string.IsNullOrEmpty(nameProperty.stringValue))
                         {
                             nameProperty.stringValue = moduleInfo.ModuleName;
                         }
-                        if (descProperty != null && string.IsNullOrEmpty(descProperty.stringValue))
+                        if(descProperty != null && string.IsNullOrEmpty(descProperty.stringValue))
                         {
                             descProperty.stringValue = moduleInfo.Description;
                         }
@@ -539,11 +534,11 @@ namespace CFramework.Core.Editor.Base
                 }
 
                 // 如果不存在，添加新配置（默认启用）
-                if (!exists)
+                if(!exists)
                 {
                     int newIndex = _autoModulesProperty.arraySize;
                     _autoModulesProperty.InsertArrayElementAtIndex(newIndex);
-                    var newElement = _autoModulesProperty.GetArrayElementAtIndex(newIndex);
+                    SerializedProperty newElement = _autoModulesProperty.GetArrayElementAtIndex(newIndex);
                     newElement.FindPropertyRelative("moduleTypeFullName").stringValue = moduleInfo.ModuleTypeFullName;
                     newElement.FindPropertyRelative("moduleName").stringValue = moduleInfo.ModuleName;
                     newElement.FindPropertyRelative("description").stringValue = moduleInfo.Description;
@@ -556,7 +551,7 @@ namespace CFramework.Core.Editor.Base
 
         private static bool IsUnityAssemblyName(string assemblyName)
         {
-            if (string.IsNullOrEmpty(assemblyName))
+            if(string.IsNullOrEmpty(assemblyName))
             {
                 return false;
             }
@@ -569,22 +564,27 @@ namespace CFramework.Core.Editor.Base
         }
 
         /// <summary>
-        /// 检查程序集是否匹配白名单
+        ///     检查程序集是否匹配白名单
         /// </summary>
         /// <param name="assemblyName">程序集名称</param>
         /// <param name="whitelist">白名单数组（null或空表示允许所有）</param>
         /// <returns>是否匹配</returns>
         private static bool MatchAssemblyWhitelist(string assemblyName, string[] whitelist)
         {
-            if (whitelist == null || whitelist.Length == 0) return true;
+            if(whitelist == null || whitelist.Length == 0) return true;
 
-            foreach (var w in whitelist)
+            foreach (string w in whitelist)
             {
-                if (!string.IsNullOrEmpty(w) && assemblyName.Contains(w)) return true;
+                if(!string.IsNullOrEmpty(w) && assemblyName.Contains(w)) return true;
             }
 
             return false;
         }
-
+        private class AutoModuleInfo
+        {
+            public string ModuleTypeFullName { get; set; }
+            public string ModuleName { get; set; }
+            public string Description { get; set; }
+        }
     }
 }

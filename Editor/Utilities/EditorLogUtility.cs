@@ -5,17 +5,11 @@ using UnityEngine;
 namespace CFramework.Core.Editor.Utilities
 {
     /// <summary>
-    /// 编辑器专用日志输出器，使用与运行时相同的日志格式
+    ///     编辑器专用日志输出器，使用与运行时相同的日志格式
     /// </summary>
     public static class EditorLogUtility
     {
         private const string DefaultTag = "CFramework";
-
-        // 日志级别颜色定义
-        private static readonly Color DebugColor = new Color(0.5f, 0.5f, 0.5f);
-        private static readonly Color InfoColor = new Color(0.3f, 0.6f, 1f);
-        private static readonly Color WarningColor = new Color(1f, 0.8f, 0.3f);
-        private static readonly Color ErrorColor = new Color(1f, 0.3f, 0.3f);
 
         // 日志级别名称
         private const string DebugLevelName = "Debug";
@@ -23,12 +17,18 @@ namespace CFramework.Core.Editor.Utilities
         private const string WarningLevelName = "Warning";
         private const string ErrorLevelName = "Error";
 
+        // 日志级别颜色定义
+        private static readonly Color DebugColor = new Color(0.5f, 0.5f, 0.5f);
+        private static readonly Color InfoColor = new Color(0.3f, 0.6f, 1f);
+        private static readonly Color WarningColor = new Color(1f, 0.8f, 0.3f);
+        private static readonly Color ErrorColor = new Color(1f, 0.3f, 0.3f);
+
         /// <summary>
-        /// 输出Info级别日志
+        ///     输出Info级别日志
         /// </summary>
         public static void LogInfo(string message, string tag = null)
         {
-            if (!ShouldLog(LogLevel.Info))
+            if(!ShouldLog(LogLevel.Info))
                 return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, InfoLevelName, InfoColor);
@@ -36,11 +36,11 @@ namespace CFramework.Core.Editor.Utilities
         }
 
         /// <summary>
-        /// 输出Debug级别日志
+        ///     输出Debug级别日志
         /// </summary>
         public static void LogDebug(string message, string tag = null)
         {
-            if (!ShouldLog(LogLevel.Debug))
+            if(!ShouldLog(LogLevel.Debug))
                 return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, DebugLevelName, DebugColor);
@@ -48,11 +48,11 @@ namespace CFramework.Core.Editor.Utilities
         }
 
         /// <summary>
-        /// 输出Warning级别日志
+        ///     输出Warning级别日志
         /// </summary>
         public static void LogWarning(string message, string tag = null)
         {
-            if (!ShouldLog(LogLevel.Warning))
+            if(!ShouldLog(LogLevel.Warning))
                 return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, WarningLevelName, WarningColor);
@@ -60,11 +60,11 @@ namespace CFramework.Core.Editor.Utilities
         }
 
         /// <summary>
-        /// 输出Error级别日志
+        ///     输出Error级别日志
         /// </summary>
         public static void LogError(string message, string tag = null)
         {
-            if (!ShouldLog(LogLevel.Error))
+            if(!ShouldLog(LogLevel.Error))
                 return;
             string effectiveTag = string.IsNullOrEmpty(tag) ? DefaultTag : tag;
             string formatted = FormatMessage(effectiveTag, message, ErrorLevelName, ErrorColor);
@@ -72,14 +72,14 @@ namespace CFramework.Core.Editor.Utilities
         }
 
         /// <summary>
-        /// 判断是否应该输出日志
+        ///     判断是否应该输出日志
         /// </summary>
         private static bool ShouldLog(LogLevel level)
         {
-            var config = ConfigUtility.GetEditorConfig<CFrameworkEditorConfig>();
-            if (config == null)
+            CFrameworkEditorConfig config = ConfigUtility.GetEditorConfig<CFrameworkEditorConfig>();
+            if(config == null)
                 return true;
-            if (!config.runtimeLog && EditorApplication.isPlayingOrWillChangePlaymode)
+            if(!config.runtimeLog && EditorApplication.isPlayingOrWillChangePlaymode)
             {
                 return false;
             }
@@ -88,7 +88,7 @@ namespace CFramework.Core.Editor.Utilities
         }
 
         /// <summary>
-        /// 格式化日志消息（与运行时保持一致的格式）
+        ///     格式化日志消息（与运行时保持一致的格式）
         /// </summary>
         private static string FormatMessage(string tag, string message, string level, Color levelColor)
         {

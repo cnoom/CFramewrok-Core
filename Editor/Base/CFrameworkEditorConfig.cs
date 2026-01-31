@@ -14,12 +14,12 @@ namespace CFramework.Core.Editor.Base
     [EditorConfig("CFrameworkEditorConfig")]
     public class CFrameworkEditorConfig : ScriptableObject
     {
-        [Header("初始化")] [Tooltip("是否执行过框架初始化")]
+        [Header("初始化"), Tooltip("是否执行过框架初始化")] 
         public bool isInitialized;
 
-        [Header("日志配置")] [Tooltip("日志输出最低等级")]
+        [Header("日志配置"), Tooltip("日志输出最低等级")] 
         public LogLevel minLogLevel = LogLevel.Info;
-        
+
         [Tooltip("运行时是否输出日志")]
         public bool runtimeLog = true;
     }

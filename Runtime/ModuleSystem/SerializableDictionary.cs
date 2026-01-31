@@ -5,12 +5,71 @@ using UnityEngine;
 namespace CFramework.Core
 {
     /// <summary>
-    /// 可序列化的字典，用于 Unity Inspector 中编辑字典类型数据
+    ///     可序列化的字典，用于 Unity Inspector 中编辑字典类型数据
     /// </summary>
     [Serializable]
     public class SerializableDictionary<TKey, TValue> : ISerializationCallbackReceiver
     {
-        [SerializeField] private List<KeyValuePair> _list = new();
+        [SerializeField]
+        private List<KeyValuePair> _list = new List<KeyValuePair>();
+
+        public Dictionary<TKey, TValue> Dictionary { get; } = new Dictionary<TKey, TValue>();
+
+        public TValue this[TKey key]
+        {
+            get => Dictionary[key];
+            set => Dictionary[key] = value;
+        }
+
+        public int Count => Dictionary.Count;
+        public ICollection<TKey> Keys => Dictionary.Keys;
+        public ICollection<TValue> Values => Dictionary.Values;
+
+        public void OnBeforeSerialize()
+        {
+            _list.Clear();
+            foreach (KeyValuePair<TKey, TValue> kvp in Dictionary)
+            {
+                _list.Add(new KeyValuePair(kvp.Key, kvp.Value));
+            }
+        }
+
+        public void OnAfterDeserialize()
+        {
+            Dictionary.Clear();
+            foreach (KeyValuePair kvp in _list)
+            {
+                if(!Dictionary.ContainsKey(kvp.key))
+                {
+                    Dictionary[kvp.key] = kvp.value;
+                }
+            }
+        }
+
+        public bool ContainsKey(TKey key)
+        {
+            return Dictionary.ContainsKey(key);
+        }
+        public bool TryGetValue(TKey key, out TValue value)
+        {
+            return Dictionary.TryGetValue(key, out value);
+        }
+        public bool TryGetValue(TKey key, TValue defaultValue)
+        {
+            return Dictionary.TryGetValue(key, out defaultValue);
+        }
+        public void Add(TKey key, TValue value)
+        {
+            Dictionary.Add(key, value);
+        }
+        public void Remove(TKey key)
+        {
+            Dictionary.Remove(key);
+        }
+        public void Clear()
+        {
+            Dictionary.Clear();
+        }
 
         [Serializable]
         public struct KeyValuePair
@@ -22,48 +81,6 @@ namespace CFramework.Core
             {
                 this.key = key;
                 this.value = value;
-            }
-        }
-
-        private Dictionary<TKey, TValue> _dictionary = new Dictionary<TKey, TValue>();
-
-        public Dictionary<TKey, TValue> Dictionary => _dictionary;
-
-        public TValue this[TKey key]
-        {
-            get => _dictionary[key];
-            set => _dictionary[key] = value;
-        }
-
-        public int Count => _dictionary.Count;
-        public ICollection<TKey> Keys => _dictionary.Keys;
-        public ICollection<TValue> Values => _dictionary.Values;
-
-        public bool ContainsKey(TKey key) => _dictionary.ContainsKey(key);
-        public bool TryGetValue(TKey key, out TValue value) => _dictionary.TryGetValue(key, out value);
-        public bool TryGetValue(TKey key, TValue defaultValue) => _dictionary.TryGetValue(key, out defaultValue);
-        public void Add(TKey key, TValue value) => _dictionary.Add(key, value);
-        public void Remove(TKey key) => _dictionary.Remove(key);
-        public void Clear() => _dictionary.Clear();
-
-        public void OnBeforeSerialize()
-        {
-            _list.Clear();
-            foreach (var kvp in _dictionary)
-            {
-                _list.Add(new KeyValuePair(kvp.Key, kvp.Value));
-            }
-        }
-
-        public void OnAfterDeserialize()
-        {
-            _dictionary.Clear();
-            foreach (var kvp in _list)
-            {
-                if (!_dictionary.ContainsKey(kvp.key))
-                {
-                    _dictionary[kvp.key] = kvp.value;
-                }
             }
         }
     }

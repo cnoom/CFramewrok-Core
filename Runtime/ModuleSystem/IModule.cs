@@ -1,10 +1,7 @@
-﻿using System;
-using Cysharp.Threading.Tasks;
-
-namespace CFramework.Core.ModuleSystem
+﻿namespace CFramework.Core.ModuleSystem
 {
     /// <summary>
-    /// 模块接口
+    ///     模块接口
     /// </summary>
     public interface IModule
     {

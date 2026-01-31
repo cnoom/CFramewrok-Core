@@ -15,7 +15,7 @@ namespace CFramework.Core.Editor.Modules
 
         private void InitializeDirectories()
         {
-            var directories = new[]
+            string[] directories =
             {
                 CFDirectoryKey.FrameworkRoot,
                 CFDirectoryKey.FrameworkGenerate,
@@ -23,7 +23,7 @@ namespace CFramework.Core.Editor.Modules
                 CFDirectoryKey.FrameworkEditorConfig
             };
 
-            foreach (var dir in directories)
+            foreach (string dir in directories)
             {
                 CFDirectoryUtility.EnsureFolder(dir);
             }

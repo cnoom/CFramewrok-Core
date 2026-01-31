@@ -10,6 +10,21 @@ namespace CFramework.Core.CommandSystem
     {
         public Delegate Handler { get; private set; }
 
+        public void Dispose()
+        {
+            Clear();
+        }
+
+        public void OnReturn()
+        {
+            Clear();
+        }
+
+        public void Set(Delegate handler)
+        {
+            Handler = handler;
+        }
+
         public async UniTask Invoke(ICommandData commandData, CFLogger logger, CancellationToken ct)
         {
             await AsyncInvoke(commandData, logger, ct);
@@ -19,7 +34,7 @@ namespace CFramework.Core.CommandSystem
         {
             try
             {
-                switch (Handler)
+                switch(Handler)
                 {
                     case Func<ICommandData, CancellationToken, UniTask> funcWithCt:
                         await funcWithCt.Invoke(commandData, ct);
@@ -45,15 +60,6 @@ namespace CFramework.Core.CommandSystem
         private void Clear()
         {
             Handler = null;
-        }
-
-        public void Dispose() => Clear();
-
-        public void OnReturn() => Clear();
-
-        public void Set(Delegate handler)
-        {
-            Handler = handler;
         }
     }
 }

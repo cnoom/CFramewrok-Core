@@ -9,7 +9,7 @@ namespace CFramework.Core.Log
             Debug,
             Info,
             Warning,
-            Error,
+            Error
         }
 
         void LogInfo(string message);

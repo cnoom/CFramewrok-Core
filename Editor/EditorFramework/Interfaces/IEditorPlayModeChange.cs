@@ -1,7 +1,7 @@
 namespace CFramework.Core.Editor.EditorFramework.Interfaces
 {
     /// <summary>
-    /// 编辑器播放模式变化接口,在进入/退出播放模式时调用
+    ///     编辑器播放模式变化接口,在进入/退出播放模式时调用
     /// </summary>
     public interface IEditorPlayModeChange
     {
@@ -9,7 +9,7 @@ namespace CFramework.Core.Editor.EditorFramework.Interfaces
     }
 
     /// <summary>
-    /// 播放模式状态
+    ///     播放模式状态
     /// </summary>
     public enum EditorPlayModeStateChange
     {

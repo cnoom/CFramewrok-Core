@@ -20,7 +20,7 @@ namespace CFramework.Core.Editor.Utilities
             string[] folders = folderPath.Split('/');
             string currentPath = folders[0];
 
-            for(int i = 1; i < folders.Length; i++)
+            for(var i = 1; i < folders.Length; i++)
             {
                 string nextPath = currentPath + "/" + folders[i];
 
@@ -44,7 +44,7 @@ namespace CFramework.Core.Editor.Utilities
         }
 
         /// <summary>
-        /// 清除已创建文件夹的缓存（在重新加载场景或重新导入时调用）
+        ///     清除已创建文件夹的缓存（在重新加载场景或重新导入时调用）
         /// </summary>
         public static void ClearCreatedFoldersCache()
         {

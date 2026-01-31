@@ -5,33 +5,18 @@ namespace CFramework.Core.Log
 {
     public class CFLogger : ICFLogger
     {
-        public ICFLogger.Level Level => _level;
         private readonly string _tag;
-        private ICFLogger.Level _level = ICFLogger.Level.Debug;
         private bool _enabled = true;
-
-        public event Action<ILogEntry> OnLog;
 
         internal CFLogger(string tag)
         {
             _tag = tag;
         }
-
-        public void SetLevel(ICFLogger.Level level)
-        {
-            _level = level;
-        }
-
-        public void SetEnabled(bool enabled)
-        {
-            _enabled = enabled;
-        }
-
-        public bool IsEnabled() => _enabled;
+        public ICFLogger.Level Level { get; private set; } = ICFLogger.Level.Debug;
 
         public void LogDebug(string message)
         {
-            if (!CanLog(ICFLogger.Level.Debug)) return;
+            if(!CanLog(ICFLogger.Level.Debug)) return;
             Color tagColor = LoggerColorManager.GetTagColor(_tag);
             string formatted = LoggerFormatter.FormatMessage(_tag, message, ICFLogger.Level.Debug, tagColor);
             Debug.Log(formatted);
@@ -40,7 +25,7 @@ namespace CFramework.Core.Log
 
         public void LogInfo(string message)
         {
-            if (!CanLog(ICFLogger.Level.Info)) return;
+            if(!CanLog(ICFLogger.Level.Info)) return;
             Color tagColor = LoggerColorManager.GetTagColor(_tag);
             string formatted = LoggerFormatter.FormatMessage(_tag, message, ICFLogger.Level.Info, tagColor);
             Debug.Log(formatted);
@@ -49,7 +34,7 @@ namespace CFramework.Core.Log
 
         public void LogWarning(string message)
         {
-            if (!CanLog(ICFLogger.Level.Warning)) return;
+            if(!CanLog(ICFLogger.Level.Warning)) return;
             Color tagColor = LoggerColorManager.GetTagColor(_tag);
             string formatted = LoggerFormatter.FormatMessage(_tag, message, ICFLogger.Level.Warning, tagColor);
             Debug.LogWarning(formatted);
@@ -58,7 +43,7 @@ namespace CFramework.Core.Log
 
         public void LogError(string message)
         {
-            if (!CanLog(ICFLogger.Level.Error)) return;
+            if(!CanLog(ICFLogger.Level.Error)) return;
             Color tagColor = LoggerColorManager.GetTagColor(_tag);
             string formatted = LoggerFormatter.FormatMessage(_tag, message, ICFLogger.Level.Error, tagColor);
             Debug.LogError(formatted);
@@ -67,16 +52,33 @@ namespace CFramework.Core.Log
 
         public void LogException(Exception exception)
         {
-            if (!_enabled || exception == null) return;
+            if(!_enabled || exception == null) return;
             string exceptionMessage = LoggerFormatter.FormatException(_tag, exception);
             Debug.LogError(exceptionMessage);
             OnLog?.Invoke(new LogEntry(_tag, ICFLogger.Level.Error, exceptionMessage, exceptionMessage, exception));
         }
 
+        public event Action<ILogEntry> OnLog;
+
+        public void SetLevel(ICFLogger.Level level)
+        {
+            Level = level;
+        }
+
+        public void SetEnabled(bool enabled)
+        {
+            _enabled = enabled;
+        }
+
+        public bool IsEnabled()
+        {
+            return _enabled;
+        }
+
         private bool CanLog(ICFLogger.Level targetLevel)
         {
-            if (!_enabled) return false;
-            return _level <= targetLevel;
+            if(!_enabled) return false;
+            return Level <= targetLevel;
         }
     }
 
@@ -91,11 +93,6 @@ namespace CFramework.Core.Log
 
     public class LogEntry : ILogEntry
     {
-        public string Tag { get; }
-        public ICFLogger.Level Level { get; }
-        public string Message { get; }
-        public string FormattedMessage { get; }
-        public Exception Exception { get; }
 
         public LogEntry(string tag, ICFLogger.Level level, string message, string formattedMessage, Exception exception = null)
         {
@@ -105,5 +102,10 @@ namespace CFramework.Core.Log
             FormattedMessage = formattedMessage;
             Exception = exception;
         }
+        public string Tag { get; }
+        public ICFLogger.Level Level { get; }
+        public string Message { get; }
+        public string FormattedMessage { get; }
+        public Exception Exception { get; }
     }
 }

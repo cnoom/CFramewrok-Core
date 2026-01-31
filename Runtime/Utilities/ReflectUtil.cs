@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
@@ -8,10 +9,10 @@ namespace CFramework.Core
     {
         public static Type GetActionType(MethodInfo method)
         {
-            var parameters = method.GetParameters();
+            ParameterInfo[] parameters = method.GetParameters();
             Type[] typeArgs = parameters.Select(p => p.ParameterType).ToArray();
 
-            switch (typeArgs.Length)
+            switch(typeArgs.Length)
             {
                 case 0: return typeof(Action);
                 case 1: return typeof(Action<>).MakeGenericType(typeArgs);
@@ -28,24 +29,27 @@ namespace CFramework.Core
 
         public static Type GetFuncType(MethodInfo method)
         {
-            var parameters = method.GetParameters();
-            var returnType = method.ReturnType;
+            ParameterInfo[] parameters = method.GetParameters();
+            Type returnType = method.ReturnType;
 
             // 注意：Func 必须包含返回类型，且返回类型不能是 void
-            if (returnType == typeof(void))
+            if(returnType == typeof(void))
                 throw new InvalidOperationException($"方法 {method.Name} 返回 void，无法用于 Func 委托。");
 
             // 组合：所有参数类型 + 返回类型（最后一个）
             Type[] typeArgs = parameters.Select(p => p.ParameterType)
-                                        .Concat(new[] { returnType })
-                                        .ToArray();
+                .Concat(new[]
+                {
+                    returnType
+                })
+                .ToArray();
 
-            switch (typeArgs.Length)
+            switch(typeArgs.Length)
             {
-                case 1: return typeof(Func<>).MakeGenericType(typeArgs);                    // () => TResult
-                case 2: return typeof(Func<,>).MakeGenericType(typeArgs);                  // (T1) => TResult
-                case 3: return typeof(Func<,,>).MakeGenericType(typeArgs);                 // (T1,T2) => TResult
-                case 4: return typeof(Func<,,,>).MakeGenericType(typeArgs);                // (T1,T2,T3) => TResult
+                case 1: return typeof(Func<>).MakeGenericType(typeArgs); // () => TResult
+                case 2: return typeof(Func<,>).MakeGenericType(typeArgs); // (T1) => TResult
+                case 3: return typeof(Func<,,>).MakeGenericType(typeArgs); // (T1,T2) => TResult
+                case 4: return typeof(Func<,,,>).MakeGenericType(typeArgs); // (T1,T2,T3) => TResult
                 case 5: return typeof(Func<,,,,>).MakeGenericType(typeArgs);
                 case 6: return typeof(Func<,,,,,>).MakeGenericType(typeArgs);
                 case 7: return typeof(Func<,,,,,,>).MakeGenericType(typeArgs);
@@ -54,14 +58,14 @@ namespace CFramework.Core
                 default: throw new NotSupportedException("参数过多，不支持创建 Func 委托");
             }
         }
-        
+
         public static MethodInfo[] GetAllInstanceMethods(Type type)
         {
-            var methods = new System.Collections.Generic.List<MethodInfo>();
-            var current = type;
+            List<MethodInfo> methods = new List<MethodInfo>();
+            Type current = type;
             while (current != null && current != typeof(object))
             {
-                var declared = current.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                MethodInfo[] declared = current.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
                 methods.AddRange(declared);
                 current = current.BaseType;
             }

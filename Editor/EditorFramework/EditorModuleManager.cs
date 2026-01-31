@@ -1,26 +1,27 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using CFramework.Core.Editor.EditorFramework.Interfaces;
 using CFramework.Core.Editor.Utilities;
 
 namespace CFramework.Core.Editor.EditorFramework
 {
     /// <summary>
-    /// 编辑器模块管理器,负责管理编辑器模块的生命周期
+    ///     编辑器模块管理器,负责管理编辑器模块的生命周期
     /// </summary>
     public class EditorModuleManager
     {
         private static EditorModuleManager _instance;
-        public static EditorModuleManager Instance => _instance ??= new EditorModuleManager();
 
-        private readonly Dictionary<Type, Interfaces.IEditorModule> _modules = new();
-        private readonly List<Interfaces.IEditorModule> _sortedModules = new();
+        private readonly Dictionary<Type, IEditorModule> _modules = new Dictionary<Type, IEditorModule>();
+        private readonly List<IEditorModule> _sortedModules = new List<IEditorModule>();
 
 
         private EditorModuleManager() { }
+        public static EditorModuleManager Instance => _instance ??= new EditorModuleManager();
 
         /// <summary>
-        /// 初始化模块管理器
+        ///     初始化模块管理器
         /// </summary>
         public void Initialize()
         {
@@ -28,14 +29,14 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 注册模块
+        ///     注册模块
         /// </summary>
-        public void RegisterModule(Interfaces.IEditorModule module)
+        public void RegisterModule(IEditorModule module)
         {
-            if (module == null) return;
+            if(module == null) return;
 
-            var type = module.GetType();
-            if (_modules.ContainsKey(type))
+            Type type = module.GetType();
+            if(_modules.ContainsKey(type))
             {
                 EditorLogUtility.LogWarning($"模块 {type.Name} 已注册，跳过。");
                 return;
@@ -48,14 +49,14 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 注销模块
+        ///     注销模块
         /// </summary>
-        public void UnregisterModule(Interfaces.IEditorModule module)
+        public void UnregisterModule(IEditorModule module)
         {
-            if (module == null) return;
+            if(module == null) return;
 
-            var type = module.GetType();
-            if (!_modules.Remove(type))
+            Type type = module.GetType();
+            if(!_modules.Remove(type))
             {
                 EditorLogUtility.LogWarning($"模块 {type.Name} 未找到，无法注销。");
                 return;
@@ -66,27 +67,27 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 获取模块
+        ///     获取模块
         /// </summary>
-        public T GetModule<T>() where T : class, Interfaces.IEditorModule
+        public T GetModule<T>() where T : class, IEditorModule
         {
-            var type = typeof(T);
-            if (_modules.TryGetValue(type, out var module))
+            Type type = typeof(T);
+            if(_modules.TryGetValue(type, out IEditorModule module))
             {
                 return module as T;
             }
 
             return null;
         }
-        
+
         /// <summary>
-        /// 调用模块初始化
+        ///     调用模块初始化
         /// </summary>
         public void CallFrameworkInitialize()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorFrameworkInitialize initialize)
+                if(module is IEditorFrameworkInitialize initialize)
                 {
                     try
                     {
@@ -101,13 +102,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块初始化
+        ///     调用模块初始化
         /// </summary>
         public void CallInitialize()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorInitialize initialize)
+                if(module is IEditorInitialize initialize)
                 {
                     try
                     {
@@ -122,13 +123,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块更新
+        ///     调用模块更新
         /// </summary>
         public void CallUpdate()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorUpdate update)
+                if(module is IEditorUpdate update)
                 {
                     try
                     {
@@ -143,13 +144,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块GUI
+        ///     调用模块GUI
         /// </summary>
         public void CallGUI()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorGUI gui)
+                if(module is IEditorGUI gui)
                 {
                     try
                     {
@@ -164,13 +165,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块层级变化
+        ///     调用模块层级变化
         /// </summary>
         public void CallHierarchyChanged()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorHierarchyChange hierarchyChange)
+                if(module is IEditorHierarchyChange hierarchyChange)
                 {
                     try
                     {
@@ -185,13 +186,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块项目变化
+        ///     调用模块项目变化
         /// </summary>
         public void CallProjectChanged()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorProjectChange projectChange)
+                if(module is IEditorProjectChange projectChange)
                 {
                     try
                     {
@@ -206,13 +207,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块选择变化
+        ///     调用模块选择变化
         /// </summary>
         public void CallSelectionChanged()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorSelectionChange selectionChange)
+                if(module is IEditorSelectionChange selectionChange)
                 {
                     try
                     {
@@ -227,13 +228,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块播放模式状态变化
+        ///     调用模块播放模式状态变化
         /// </summary>
-        public void CallPlayModeStateChanged(Interfaces.EditorPlayModeStateChange playModeStateChange)
+        public void CallPlayModeStateChanged(EditorPlayModeStateChange playModeStateChange)
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorPlayModeChange playModeChange)
+                if(module is IEditorPlayModeChange playModeChange)
                 {
                     try
                     {
@@ -248,13 +249,13 @@ namespace CFramework.Core.Editor.EditorFramework
         }
 
         /// <summary>
-        /// 调用模块释放
+        ///     调用模块释放
         /// </summary>
         public void CallDispose()
         {
-            foreach (var module in _sortedModules)
+            foreach (IEditorModule module in _sortedModules)
             {
-                if (module is Interfaces.IEditorDispose dispose)
+                if(module is IEditorDispose dispose)
                 {
                     try
                     {
@@ -266,21 +267,21 @@ namespace CFramework.Core.Editor.EditorFramework
                     }
                 }
             }
-            EditorLogUtility.LogInfo($"已为 {_sortedModules.Count(m => m is Interfaces.IEditorDispose)} 个模块调用 OnEditorDispose。");
+            EditorLogUtility.LogInfo($"已为 {_sortedModules.Count(m => m is IEditorDispose)} 个模块调用 OnEditorDispose。");
         }
 
         /// <summary>
-        /// 按优先级排序模块
+        ///     按优先级排序模块
         /// </summary>
         private void SortModules()
         {
             _sortedModules.Sort((a, b) =>
             {
-                var attrA = a.GetType().GetCustomAttributes(typeof(AutoEditorModuleAttribute), false).FirstOrDefault() as AutoEditorModuleAttribute;
-                var attrB = b.GetType().GetCustomAttributes(typeof(AutoEditorModuleAttribute), false).FirstOrDefault() as AutoEditorModuleAttribute;
+                AutoEditorModuleAttribute attrA = a.GetType().GetCustomAttributes(typeof(AutoEditorModuleAttribute), false).FirstOrDefault() as AutoEditorModuleAttribute;
+                AutoEditorModuleAttribute attrB = b.GetType().GetCustomAttributes(typeof(AutoEditorModuleAttribute), false).FirstOrDefault() as AutoEditorModuleAttribute;
 
-                var priorityA = attrA?.Priority ?? 0;
-                var priorityB = attrB?.Priority ?? 0;
+                int priorityA = attrA?.Priority ?? 0;
+                int priorityB = attrB?.Priority ?? 0;
 
                 return priorityA.CompareTo(priorityB);
             });

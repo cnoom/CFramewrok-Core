@@ -10,7 +10,7 @@ namespace CFramework.Core.Editor.Modules
     [AutoEditorModule("DirectoryInitializerModule", 10)]
     public class CFrameworkConfigModule : IEditorModule, IEditorFrameworkInitialize
     {
-        private readonly static string ConfigPath = CFDirectoryKey.FrameworkConfig + "/CFrameworkConfig.asset";
+        private static readonly string ConfigPath = CFDirectoryKey.FrameworkConfig + "/CFrameworkConfig.asset";
 
         public void OnEditorFrameworkInitialize()
         {
@@ -20,22 +20,22 @@ namespace CFramework.Core.Editor.Modules
         private void EnsureCFrameworkConfig()
         {
             CFDirectoryUtility.EnsureFolder(CFDirectoryKey.FrameworkConfig);
-            var config = AssetDatabase.LoadAssetAtPath<CFrameworkConfig>(ConfigPath);
-            if (config != null) return;
+            CFrameworkConfig config = AssetDatabase.LoadAssetAtPath<CFrameworkConfig>(ConfigPath);
+            if(config != null) return;
             CreateCFrameworkConfig();
         }
 
         [MenuItem(CFMenuKey.Base + "生成框架配置")]
         private static void CommandCreateCFrameworkConfig()
         {
-            var config = AssetDatabase.LoadAssetAtPath<CFrameworkConfig>(ConfigPath);
-            if (config != null) return;
+            CFrameworkConfig config = AssetDatabase.LoadAssetAtPath<CFrameworkConfig>(ConfigPath);
+            if(config != null) return;
             CreateCFrameworkConfig();
         }
 
         private static void CreateCFrameworkConfig()
         {
-            var config = ScriptableObject.CreateInstance<CFrameworkConfig>();
+            CFrameworkConfig config = ScriptableObject.CreateInstance<CFrameworkConfig>();
             AssetDatabase.CreateAsset(config, ConfigPath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();

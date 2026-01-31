@@ -6,21 +6,21 @@ using UnityEditor;
 namespace CFramework.Core.Editor.EditorFramework
 {
     /// <summary>
-    /// 编辑器框架类,负责初始化和管理整个编辑器框架的生命周期
+    ///     编辑器框架类,负责初始化和管理整个编辑器框架的生命周期
     /// </summary>
     [InitializeOnLoad]
     public class EditorCFramework
     {
+
+        static EditorCFramework()
+        {
+            Initialize();
+        }
         [MenuItem(CFMenuKey.Base + "/重新执行框架初始化")]
         private static void RetryFrameworkInitialize()
         {
             ConfigUtility.ClearEditorCache();
             TryFrameworkInitialize(true);
-        }
-
-        static EditorCFramework()
-        {
-            Initialize();
         }
 
         private static void Initialize()
@@ -40,8 +40,8 @@ namespace CFramework.Core.Editor.EditorFramework
 
         private static void TryFrameworkInitialize(bool force = false)
         {
-            var config = ConfigUtility.GetOrCreateEditorConfig<CFrameworkEditorConfig>();
-            if (!config.isInitialized || force)
+            CFrameworkEditorConfig config = ConfigUtility.GetOrCreateEditorConfig<CFrameworkEditorConfig>();
+            if(!config.isInitialized || force)
             {
                 config.isInitialized = true;
                 EditorUtility.SetDirty(config);
@@ -89,19 +89,19 @@ namespace CFramework.Core.Editor.EditorFramework
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
         {
             EditorPlayModeStateChange editorState;
-            switch (state)
+            switch(state)
             {
                 case PlayModeStateChange.EnteredEditMode:
-                    editorState = Interfaces.EditorPlayModeStateChange.EnteredEditMode;
+                    editorState = EditorPlayModeStateChange.EnteredEditMode;
                     break;
                 case PlayModeStateChange.ExitingEditMode:
-                    editorState = Interfaces.EditorPlayModeStateChange.EnteringPlayMode;
+                    editorState = EditorPlayModeStateChange.EnteringPlayMode;
                     break;
                 case PlayModeStateChange.EnteredPlayMode:
-                    editorState = Interfaces.EditorPlayModeStateChange.EnteredPlayMode;
+                    editorState = EditorPlayModeStateChange.EnteredPlayMode;
                     break;
                 case PlayModeStateChange.ExitingPlayMode:
-                    editorState = Interfaces.EditorPlayModeStateChange.ExitingPlayMode;
+                    editorState = EditorPlayModeStateChange.ExitingPlayMode;
                     break;
                 default:
                     return;

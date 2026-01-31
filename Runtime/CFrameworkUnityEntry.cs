@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using CFramework.Core.Execution;
+﻿using CFramework.Core.Execution;
 using CFramework.Core.Log;
 using CFramework.Core.ModuleSystem;
 using Cysharp.Threading.Tasks;
@@ -9,7 +7,7 @@ using UnityEngine;
 namespace CFramework.Core
 {
     /// <summary>
-    /// 框架的unity绑定（仅使用 CFrameworkConfig 作为配置来源）
+    ///     框架的unity绑定（仅使用 CFrameworkConfig 作为配置来源）
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public class CFrameworkUnityEntry : MonoBehaviour
@@ -36,16 +34,16 @@ namespace CFramework.Core
                 return;
             }
 
-            var options = new ModuleDiscoverOptions(
-                assemblyWhitelist: config.autoDiscoverConfig.assemblyWhitelist
+            ModuleDiscoverOptions options = new ModuleDiscoverOptions(
+                config.autoDiscoverConfig.assemblyWhitelist
             );
 
             // 设置已启用模块列表获取回调
             options.GetEnabledModules = () => config.autoDiscoverConfig.GetEnabledModules();
             // 保持向后兼容性
-            options.GetModuleEnabled = (moduleType) => config.autoDiscoverConfig.IsModuleEnabled(moduleType);
+            options.GetModuleEnabled = moduleType => config.autoDiscoverConfig.IsModuleEnabled(moduleType);
 
-            var execOptions = new CFExecutionOptions
+            CFExecutionOptions execOptions = new CFExecutionOptions
             {
                 EnsureMainThread = config.executionConfig.ensureMainThread,
                 BroadcastConcurrency =
@@ -58,19 +56,19 @@ namespace CFramework.Core
 
             LoggerColorManager.Initialize(config);
 
-            var created = new CFramework(gameObject.GetCancellationTokenOnDestroy(),
+            CFramework created = new CFramework(gameObject.GetCancellationTokenOnDestroy(),
                 new CFramework.TagConfig(config.tagConfig.broadcastTag, config.tagConfig.moduleManagerTag,
                     config.tagConfig.commandTag, config.tagConfig.queryTag),
                 options,
                 execOptions,
                 new CFramework.LoggerBootstrapOptions(
-                    GlobalEnabled: config.loggerConfig.loggerGlobalEnabled,
-                    DefaultEnabled: config.loggerConfig.enableDefaultLogger,
-                    BroadcastEnabled: config.loggerConfig.enableBroadcastLogger,
-                    ModuleEnabled: config.loggerConfig.enableModuleLogger,
-                    CommandEnabled: config.loggerConfig.enableCommandLogger,
-                    QueryEnabled: config.loggerConfig.enableQueryLogger,
-                    GlobalLevel: config.loggerConfig.defaultLogLevel)
+                    config.loggerConfig.loggerGlobalEnabled,
+                    config.loggerConfig.enableDefaultLogger,
+                    config.loggerConfig.enableBroadcastLogger,
+                    config.loggerConfig.enableModuleLogger,
+                    config.loggerConfig.enableCommandLogger,
+                    config.loggerConfig.enableQueryLogger,
+                    config.loggerConfig.defaultLogLevel)
             );
 
             if(!CF.Initialize(created))
@@ -83,7 +81,7 @@ namespace CFramework.Core
 
             if(config.loggerConfig.additionalLoggerToggles != null)
             {
-                foreach (var t in config.loggerConfig.additionalLoggerToggles)
+                foreach (LoggerToggle t in config.loggerConfig.additionalLoggerToggles)
                 {
                     if(t == null) continue;
                     if(string.IsNullOrEmpty(t.tag)) continue;
@@ -106,29 +104,14 @@ namespace CFramework.Core
             _cFramework?.Update();
         }
 
-        private void LateUpdate()
-        {
-            _cFramework?.LateUpdate();
-        }
-
         private void FixedUpdate()
         {
             _cFramework?.PhysicsUpdate();
         }
 
-        private void OnApplicationPause(bool pauseStatus)
+        private void LateUpdate()
         {
-            _cFramework?.OnApplicationPause(pauseStatus);
-        }
-
-        private void OnApplicationFocus(bool focus)
-        {
-            _cFramework?.OnApplicationFocus(focus);
-        }
-
-        private void OnApplicationQuit()
-        {
-            _cFramework?.OnApplicationQuit();
+            _cFramework?.LateUpdate();
         }
 
         private void OnDestroy()
@@ -140,6 +123,21 @@ namespace CFramework.Core
                 CF.TryClearInstance(_cFramework);
             });
             LoggerColorManager.Clear();
+        }
+
+        private void OnApplicationFocus(bool focus)
+        {
+            _cFramework?.OnApplicationFocus(focus);
+        }
+
+        private void OnApplicationPause(bool pauseStatus)
+        {
+            _cFramework?.OnApplicationPause(pauseStatus);
+        }
+
+        private void OnApplicationQuit()
+        {
+            _cFramework?.OnApplicationQuit();
         }
     }
 }

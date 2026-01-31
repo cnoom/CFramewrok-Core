@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
-using CFramework.Core;
 using CFramework.Core.Attributes;
 using CFramework.Core.Execution;
 using CFramework.Core.Log;
@@ -15,26 +15,25 @@ namespace CFramework.Core.BroadcastSystem
     public class BroadcastManager
     {
         // 使用 Copy-on-Write 快照数组，读零锁
-        private readonly ConcurrentDictionary<Type, BroadcastHandler[]> _listeners = new();
+        private readonly ConcurrentDictionary<Type, BroadcastHandler[]> _listeners = new ConcurrentDictionary<Type, BroadcastHandler[]>();
 
         // 每个广播类型一个锁对象（仅在写入时使用）
-        private readonly ConcurrentDictionary<Type, object> _locks = new();
-
-        private readonly CFPool<BroadcastHandler> _pool = new(() => new BroadcastHandler(), maxCapacity: 256,
-            prewarm: 16);
+        private readonly ConcurrentDictionary<Type, object> _locks = new ConcurrentDictionary<Type, object>();
 
         private readonly CFLogger _logger;
 
-        public bool EnsureMainThread { get; set; } = true;
-        public CFExecutionOptions Options { get; set; } = new();
-        private bool _disposed = false;
+        private readonly CFPool<BroadcastHandler> _pool = new CFPool<BroadcastHandler>(() => new BroadcastHandler(), maxCapacity: 256, prewarm: 16);
+        private bool _disposed;
 
         internal BroadcastManager(CFLogger logger, CFExecutionOptions options = null)
         {
             _logger = logger;
-            if (options != null) Options = options;
+            if(options != null) Options = options;
             EnsureMainThread = Options.EnsureMainThread;
         }
+
+        public bool EnsureMainThread { get; set; } = true;
+        public CFExecutionOptions Options { get; set; } = new CFExecutionOptions();
 
         #region 订阅
 
@@ -42,16 +41,16 @@ namespace CFramework.Core.BroadcastSystem
         public void Subscribe<T>(Func<T, CancellationToken, UniTask> action, int priority = 100)
             where T : IBroadcastData
         {
-            var type = typeof(T);
-            var locker = _locks.GetOrAdd(type, _ => new object());
+            Type type = typeof(T);
+            object locker = _locks.GetOrAdd(type, _ => new object());
 
-            var handler = _pool.Get();
-            handler.Set(priority, action, needsMainThread: EnsureMainThread);
+            BroadcastHandler handler = _pool.Get();
+            handler.Set(priority, action, EnsureMainThread);
 
             lock (locker)
             {
-                var oldArr = _listeners.TryGetValue(type, out var arr) ? arr : Array.Empty<BroadcastHandler>();
-                var newArr = new BroadcastHandler[oldArr.Length + 1];
+                BroadcastHandler[] oldArr = _listeners.TryGetValue(type, out BroadcastHandler[] arr) ? arr : Array.Empty<BroadcastHandler>();
+                BroadcastHandler[] newArr = new BroadcastHandler[oldArr.Length + 1];
                 Array.Copy(oldArr, newArr, oldArr.Length);
                 newArr[^1] = handler;
                 Array.Sort(newArr);
@@ -61,31 +60,42 @@ namespace CFramework.Core.BroadcastSystem
 
         #endregion
 
+        public async UniTask DisposeAsync()
+        {
+            if(_disposed) return;
+            _disposed = true;
+            _listeners.Clear();
+            _locks.Clear();
+            _pool.Dispose();
+            _logger.LogInfo("广播管理异步卸载完成!");
+            await UniTask.CompletedTask;
+        }
+
         #region 取消注册（按目标委托删除）
 
         public void Unsubscribe<T>(Func<T, CancellationToken, UniTask> handler) where T : IBroadcastData
         {
-            RemoveHandler(typeof(T), h => h.Handler == (Delegate)handler, out var removed);
-            if (removed != null) _pool.Return(removed);
+            RemoveHandler(typeof(T), h => h.Handler == (Delegate)handler, out BroadcastHandler removed);
+            if(removed != null) _pool.Return(removed);
         }
 
         private void RemoveHandler(Type type, Predicate<BroadcastHandler> match, out BroadcastHandler removed)
         {
             removed = null;
-            if (!_listeners.TryGetValue(type, out var oldArr) || oldArr.Length == 0) return;
+            if(!_listeners.TryGetValue(type, out BroadcastHandler[] oldArr) || oldArr.Length == 0) return;
 
-            var locker = _locks.GetOrAdd(type, _ => new object());
+            object locker = _locks.GetOrAdd(type, _ => new object());
             lock (locker)
             {
-                oldArr = _listeners.TryGetValue(type, out var arr2) ? arr2 : Array.Empty<BroadcastHandler>();
-                if (oldArr.Length == 0) return;
+                oldArr = _listeners.TryGetValue(type, out BroadcastHandler[] arr2) ? arr2 : Array.Empty<BroadcastHandler>();
+                if(oldArr.Length == 0) return;
 
                 int idx = Array.FindIndex(oldArr, h => match(h));
-                if (idx < 0) return;
+                if(idx < 0) return;
 
                 removed = oldArr[idx];
 
-                if (oldArr.Length == 1)
+                if(oldArr.Length == 1)
                 {
                     _listeners[type] = Array.Empty<BroadcastHandler>();
                     // 清理锁对象，防止内存泄漏
@@ -93,9 +103,9 @@ namespace CFramework.Core.BroadcastSystem
                 }
                 else
                 {
-                    var newArr = new BroadcastHandler[oldArr.Length - 1];
-                    if (idx > 0) Array.Copy(oldArr, 0, newArr, 0, idx);
-                    if (idx < oldArr.Length - 1) Array.Copy(oldArr, idx + 1, newArr, idx, oldArr.Length - idx - 1);
+                    BroadcastHandler[] newArr = new BroadcastHandler[oldArr.Length - 1];
+                    if(idx > 0) Array.Copy(oldArr, 0, newArr, 0, idx);
+                    if(idx < oldArr.Length - 1) Array.Copy(oldArr, idx + 1, newArr, idx, oldArr.Length - idx - 1);
                     _listeners[type] = newArr;
                 }
             }
@@ -107,34 +117,34 @@ namespace CFramework.Core.BroadcastSystem
 
         public async UniTask Broadcast<T>(T data, CancellationToken externalCt = default) where T : IBroadcastData
         {
-            var broadcastType = typeof(T);
-            if (!_listeners.TryGetValue(broadcastType, out var snapshot) || snapshot.Length == 0) return;
+            Type broadcastType = typeof(T);
+            if(!_listeners.TryGetValue(broadcastType, out BroadcastHandler[] snapshot) || snapshot.Length == 0) return;
 
-            using var context = new CFExecutionContext(Options, externalCt, Options.OverallTimeout);
+            using CFExecutionContext context = new CFExecutionContext(Options, externalCt, Options.OverallTimeout);
 
-            var startTs = DateTime.UtcNow;
+            DateTime startTs = DateTime.UtcNow;
             _logger.LogDebug($"[Broadcast-Start]\ntype={broadcastType.Name} data={data}\nhandlers={snapshot.Length}");
 
-            if (Options.BroadcastConcurrency == ConcurrencyMode.Concurrent)
+            if(Options.BroadcastConcurrency == ConcurrencyMode.Concurrent)
             {
-                var taskList = new List<UniTask>(snapshot.Length);
-                var stopOnErrorCts = new CancellationTokenSource();
+                List<UniTask> taskList = new List<UniTask>(snapshot.Length);
+                CancellationTokenSource stopOnErrorCts = new CancellationTokenSource();
 
-                foreach (var t in snapshot)
+                foreach (BroadcastHandler t in snapshot)
                 {
-                    if (Options.CancellationPolicy == CancellationPolicy.CancelAll &&
-                        context.CancellationToken.IsCancellationRequested)
+                    if(Options.CancellationPolicy == CancellationPolicy.CancelAll &&
+                       context.CancellationToken.IsCancellationRequested)
                         break;
 
-                    var perHandlerCts = CreatePerHandlerCts(context.CancellationToken, Options.PerHandlerTimeout);
-                    var linkedCts =
+                    CancellationTokenSource perHandlerCts = CreatePerHandlerCts(context.CancellationToken, Options.PerHandlerTimeout);
+                    CancellationTokenSource linkedCts =
                         CancellationTokenSource.CreateLinkedTokenSource(perHandlerCts.Token, stopOnErrorCts.Token);
                     taskList.Add(RunHandlerConcurrentWithDispose(data, t, linkedCts, stopOnErrorCts));
                 }
 
                 try
                 {
-                    if (taskList.Count > 0)
+                    if(taskList.Count > 0)
                         await UniTask.WhenAll(taskList.ToArray());
                 }
                 catch (OperationCanceledException)
@@ -148,39 +158,39 @@ namespace CFramework.Core.BroadcastSystem
                 finally
                 {
                     stopOnErrorCts?.Dispose();
-                    var dur = (System.DateTime.UtcNow - startTs).TotalMilliseconds;
+                    double dur = (DateTime.UtcNow - startTs).TotalMilliseconds;
                     _logger.LogDebug($"[Broadcast-End]\ntype={broadcastType.Name}  data={data}\ndurationMs={dur:F1}");
                 }
             }
             else
             {
-                foreach (var h in snapshot)
+                foreach (BroadcastHandler h in snapshot)
                 {
-                    if (context.CancellationToken.IsCancellationRequested)
+                    if(context.CancellationToken.IsCancellationRequested)
                     {
-                        if (Options.CancellationPolicy == CancellationPolicy.CancelAll) break;
-                        else continue;
+                        if(Options.CancellationPolicy == CancellationPolicy.CancelAll) break;
+                        continue;
                     }
 
-                    using var perHandlerCts = CreatePerHandlerCts(context.CancellationToken, Options.PerHandlerTimeout);
+                    using CancellationTokenSource perHandlerCts = CreatePerHandlerCts(context.CancellationToken, Options.PerHandlerTimeout);
                     try
                     {
-                        if (h.NeedsMainThread) await UniTask.SwitchToMainThread();
+                        if(h.NeedsMainThread) await UniTask.SwitchToMainThread();
                         await h.Invoke(data, _logger, perHandlerCts.Token);
                     }
                     catch (OperationCanceledException)
                     {
-                        if (Options.CancellationPolicy == CancellationPolicy.CancelAll) break;
+                        if(Options.CancellationPolicy == CancellationPolicy.CancelAll) break;
                     }
                     catch (Exception e)
                     {
                         _logger.LogException(e);
-                        if (Options.ErrorPolicy == ErrorPolicy.StopOnError)
+                        if(Options.ErrorPolicy == ErrorPolicy.StopOnError)
                             break;
                     }
                 }
 
-                var dur = (System.DateTime.UtcNow - startTs).TotalMilliseconds;
+                double dur = (DateTime.UtcNow - startTs).TotalMilliseconds;
                 _logger.LogDebug($"[Broadcast-End]\ntype={broadcastType.Name}  data={data}\ndurationMs={dur:F1}");
             }
         }
@@ -191,7 +201,7 @@ namespace CFramework.Core.BroadcastSystem
         {
             try
             {
-                if (h.NeedsMainThread) await UniTask.SwitchToMainThread();
+                if(h.NeedsMainThread) await UniTask.SwitchToMainThread();
                 await h.Invoke(data, _logger, ct);
             }
             catch (OperationCanceledException)
@@ -202,7 +212,7 @@ namespace CFramework.Core.BroadcastSystem
             {
                 _logger.LogException(e);
                 // 如果启用 StopOnError，取消所有其他并发任务
-                if (Options.ErrorPolicy == ErrorPolicy.StopOnError)
+                if(Options.ErrorPolicy == ErrorPolicy.StopOnError)
                 {
                     stopOnErrorCts?.Cancel();
                     throw;
@@ -227,8 +237,8 @@ namespace CFramework.Core.BroadcastSystem
         // 创建可释放的 per-handler CTS（确保链接到父级，并可选超时）
         private static CancellationTokenSource CreatePerHandlerCts(CancellationToken parent, TimeSpan timeout)
         {
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(parent);
-            if (timeout > TimeSpan.Zero)
+            CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(parent);
+            if(timeout > TimeSpan.Zero)
             {
                 cts.CancelAfter(timeout);
             }
@@ -242,35 +252,35 @@ namespace CFramework.Core.BroadcastSystem
 
         public void Register<T>(T broadcaster) where T : class
         {
-            if (broadcaster == null)
+            if(broadcaster == null)
             {
                 _logger.LogError($"type={typeof(T).Name} 实例为空!");
                 return;
             }
 
-            var type = broadcaster.GetType();
-            var methods = ReflectUtil.GetAllInstanceMethods(type);
+            Type type = broadcaster.GetType();
+            MethodInfo[] methods = ReflectUtil.GetAllInstanceMethods(type);
 
-            foreach (var method in methods)
+            foreach (MethodInfo method in methods)
             {
-                var attributes = method.GetCustomAttributes<BroadcastHandlerAttribute>(inherit: true);
-                if (method.IsAbstract) continue;
-                foreach (var attribute in attributes)
+                IEnumerable<BroadcastHandlerAttribute> attributes = method.GetCustomAttributes<BroadcastHandlerAttribute>(true);
+                if(method.IsAbstract) continue;
+                foreach (BroadcastHandlerAttribute attribute in attributes)
                 {
-                    var parameters = method.GetParameters();
+                    ParameterInfo[] parameters = method.GetParameters();
                     // 广播处理器必须返回 UniTask，支持 (IBroadcastData) 或 (IBroadcastData, CancellationToken) 两种签名
-                    if (parameters.Length < 1 ||
-                        !typeof(IBroadcastData).IsAssignableFrom(parameters[0].ParameterType) ||
-                        (parameters.Length == 2 && parameters[1].ParameterType != typeof(CancellationToken)) ||
-                        parameters.Length > 2)
+                    if(parameters.Length < 1 ||
+                       !typeof(IBroadcastData).IsAssignableFrom(parameters[0].ParameterType) ||
+                       parameters.Length == 2 && parameters[1].ParameterType != typeof(CancellationToken) ||
+                       parameters.Length > 2)
                     {
                         _logger.LogWarning($"类型 {type.Name} 方法 {method.Name} 的参数不符合广播处理器的要求。");
                         continue;
                     }
 
-                    var returnType = method.ReturnType;
-                    var hasCancellationToken = parameters.Length == 2;
-                    if (returnType != typeof(UniTask))
+                    Type returnType = method.ReturnType;
+                    bool hasCancellationToken = parameters.Length == 2;
+                    if(returnType != typeof(UniTask))
                     {
                         _logger.LogWarning($"类型 {type.Name} 方法 {method.Name} 必须返回 UniTask，已忽略注册。");
                         continue;
@@ -278,82 +288,88 @@ namespace CFramework.Core.BroadcastSystem
 
                     // 原始具体类型委托 + 统一适配器构建（性能优化：消除调用期 DynamicInvoke）
                     Delegate action;
-                    var dataType = parameters[0].ParameterType;
+                    Type dataType = parameters[0].ParameterType;
 
-                    if (hasCancellationToken)
+                    if(hasCancellationToken)
                     {
                         // 原始强类型委托：Func<TConcrete, CancellationToken, UniTask>
-                        var funcType =
+                        Type funcType =
                             typeof(Func<,,>).MakeGenericType(dataType, typeof(CancellationToken), typeof(UniTask));
-                        var original = method.CreateDelegate(funcType, broadcaster);
+                        Delegate original = method.CreateDelegate(funcType, broadcaster);
 
                         // 适配器：Func<IBroadcastData, CancellationToken, UniTask>
-                        var dParam = System.Linq.Expressions.Expression.Parameter(typeof(IBroadcastData), "d");
-                        var ctParam = System.Linq.Expressions.Expression.Parameter(typeof(CancellationToken), "ct");
-                        var castD = System.Linq.Expressions.Expression.Convert(dParam, dataType);
-                        var originalConst = System.Linq.Expressions.Expression.Constant(original);
-                        var invokeExpr = System.Linq.Expressions.Expression.Invoke(originalConst, castD, ctParam);
+                        ParameterExpression dParam = Expression.Parameter(typeof(IBroadcastData), "d");
+                        ParameterExpression ctParam = Expression.Parameter(typeof(CancellationToken), "ct");
+                        UnaryExpression castD = Expression.Convert(dParam, dataType);
+                        ConstantExpression originalConst = Expression.Constant(original);
+                        InvocationExpression invokeExpr = Expression.Invoke(originalConst, castD, ctParam);
 
-                        var condition = System.Linq.Expressions.Expression.Condition(
-                            System.Linq.Expressions.Expression.TypeIs(dParam, dataType),
+                        ConditionalExpression condition = Expression.Condition(
+                            Expression.TypeIs(dParam, dataType),
                             invokeExpr,
-                            System.Linq.Expressions.Expression.Throw(
-                                System.Linq.Expressions.Expression.New(
-                                    typeof(ArgumentException).GetConstructor(new[] { typeof(string) }),
-                                    System.Linq.Expressions.Expression.Constant($"广播数据类型不匹配，期望 {dataType.Name}")
+                            Expression.Throw(
+                                Expression.New(
+                                    typeof(ArgumentException).GetConstructor(new[]
+                                    {
+                                        typeof(string)
+                                    }),
+                                    Expression.Constant($"广播数据类型不匹配，期望 {dataType.Name}")
                                 ),
                                 typeof(UniTask)
                             )
                         );
 
-                        action = System.Linq.Expressions.Expression
+                        action = Expression
                             .Lambda<Func<IBroadcastData, CancellationToken, UniTask>>(condition, dParam, ctParam)
                             .Compile();
                     }
                     else
                     {
                         // 原始强类型委托：Func<TConcrete, UniTask>
-                        var funcType = typeof(Func<,>).MakeGenericType(dataType, typeof(UniTask));
-                        var original = method.CreateDelegate(funcType, broadcaster);
+                        Type funcType = typeof(Func<,>).MakeGenericType(dataType, typeof(UniTask));
+                        Delegate original = method.CreateDelegate(funcType, broadcaster);
 
                         // 适配器：Func<IBroadcastData, UniTask>
-                        var dParam = System.Linq.Expressions.Expression.Parameter(typeof(IBroadcastData), "d");
-                        var castD = System.Linq.Expressions.Expression.Convert(dParam, dataType);
-                        var originalConst = System.Linq.Expressions.Expression.Constant(original);
-                        var invokeExpr = System.Linq.Expressions.Expression.Invoke(originalConst, castD);
+                        ParameterExpression dParam = Expression.Parameter(typeof(IBroadcastData), "d");
+                        UnaryExpression castD = Expression.Convert(dParam, dataType);
+                        ConstantExpression originalConst = Expression.Constant(original);
+                        InvocationExpression invokeExpr = Expression.Invoke(originalConst, castD);
 
-                        var condition = System.Linq.Expressions.Expression.Condition(
-                            System.Linq.Expressions.Expression.TypeIs(dParam, dataType),
+                        ConditionalExpression condition = Expression.Condition(
+                            Expression.TypeIs(dParam, dataType),
                             invokeExpr,
-                            System.Linq.Expressions.Expression.Throw(
-                                System.Linq.Expressions.Expression.New(
-                                    typeof(ArgumentException).GetConstructor(new[] { typeof(string) }),
-                                    System.Linq.Expressions.Expression.Constant($"广播数据类型不匹配，期望 {dataType.Name}")
+                            Expression.Throw(
+                                Expression.New(
+                                    typeof(ArgumentException).GetConstructor(new[]
+                                    {
+                                        typeof(string)
+                                    }),
+                                    Expression.Constant($"广播数据类型不匹配，期望 {dataType.Name}")
                                 ),
                                 typeof(UniTask)
                             )
                         );
 
-                        action = System.Linq.Expressions.Expression
+                        action = Expression
                             .Lambda<Func<IBroadcastData, UniTask>>(condition, dParam)
                             .Compile();
                     }
 
-                    var broadcastType = dataType;
+                    Type broadcastType = dataType;
 
                     // 创建并添加 handler（Copy-on-Write）
-                    var locker = _locks.GetOrAdd(broadcastType, _ => new object());
-                    var handler = _pool.Get();
-                    handler.Set(attribute.Priority, action, needsMainThread: (attribute.RequiresMainThread));
+                    object locker = _locks.GetOrAdd(broadcastType, _ => new object());
+                    BroadcastHandler handler = _pool.Get();
+                    handler.Set(attribute.Priority, action, attribute.RequiresMainThread);
                     handler.SourceTarget = broadcaster;
                     handler.SourceMethod = method;
 
                     lock (locker)
                     {
-                        var oldArr = _listeners.TryGetValue(broadcastType, out var arr)
+                        BroadcastHandler[] oldArr = _listeners.TryGetValue(broadcastType, out BroadcastHandler[] arr)
                             ? arr
                             : Array.Empty<BroadcastHandler>();
-                        var newArr = new BroadcastHandler[oldArr.Length + 1];
+                        BroadcastHandler[] newArr = new BroadcastHandler[oldArr.Length + 1];
                         Array.Copy(oldArr, newArr, oldArr.Length);
                         newArr[^1] = handler;
                         Array.Sort(newArr);
@@ -365,64 +381,64 @@ namespace CFramework.Core.BroadcastSystem
 
         public void Unregister<T>(T broadcaster) where T : class
         {
-            var type = broadcaster.GetType();
-            var methods = ReflectUtil.GetAllInstanceMethods(type);
+            Type type = broadcaster.GetType();
+            MethodInfo[] methods = ReflectUtil.GetAllInstanceMethods(type);
 
-            foreach (var method in methods)
+            foreach (MethodInfo method in methods)
             {
-                var parameters = method.GetParameters();
-                if (parameters.Length < 1 ||
-                    !typeof(IBroadcastData).IsAssignableFrom(parameters[0].ParameterType))
+                ParameterInfo[] parameters = method.GetParameters();
+                if(parameters.Length < 1 ||
+                   !typeof(IBroadcastData).IsAssignableFrom(parameters[0].ParameterType))
                 {
                     continue;
                 }
 
-                var broadcastType = parameters[0].ParameterType;
-                if (!_listeners.TryGetValue(broadcastType, out var oldArr) || oldArr.Length == 0) continue;
+                Type broadcastType = parameters[0].ParameterType;
+                if(!_listeners.TryGetValue(broadcastType, out BroadcastHandler[] oldArr) || oldArr.Length == 0) continue;
 
-                var locker = _locks.GetOrAdd(broadcastType, _ => new object());
+                object locker = _locks.GetOrAdd(broadcastType, _ => new object());
                 List<BroadcastHandler> removedList = null;
 
                 lock (locker)
                 {
-                    oldArr = _listeners.TryGetValue(broadcastType, out var arr2)
+                    oldArr = _listeners.TryGetValue(broadcastType, out BroadcastHandler[] arr2)
                         ? arr2
                         : Array.Empty<BroadcastHandler>();
-                    if (oldArr.Length == 0) continue;
+                    if(oldArr.Length == 0) continue;
 
                     // 找到匹配当前 broadcaster + method 的所有 handler
-                    var indexes = new List<int>();
-                    for (int i = 0; i < oldArr.Length; i++)
+                    List<int> indexes = new List<int>();
+                    for(var i = 0; i < oldArr.Length; i++)
                     {
-                        var h = oldArr[i];
+                        BroadcastHandler h = oldArr[i];
                         // 先用记录的来源信息匹配（可靠）
-                        bool matchBySource = (h.SourceTarget == broadcaster && h.SourceMethod == method);
+                        bool matchBySource = h.SourceTarget == broadcaster && h.SourceMethod == method;
                         // 兼容旧数据：退回到适配后委托的 Target/Method 匹配（可能失败）
-                        bool matchByDelegate = (h.Handler != null && h.Handler.Target == broadcaster &&
-                                                h.Handler.Method == method);
-                        if (matchBySource || matchByDelegate)
+                        bool matchByDelegate = h.Handler != null && h.Handler.Target == broadcaster &&
+                                               h.Handler.Method == method;
+                        if(matchBySource || matchByDelegate)
                         {
                             indexes.Add(i);
                         }
                     }
 
-                    if (indexes.Count == 0) continue;
+                    if(indexes.Count == 0) continue;
 
                     removedList = new List<BroadcastHandler>(indexes.Count);
                     // 生成新数组，移除这些 index
-                    var keepCount = oldArr.Length - indexes.Count;
-                    var newArr = new BroadcastHandler[keepCount];
-                    int write = 0;
-                    int nextIdxPos = 0;
+                    int keepCount = oldArr.Length - indexes.Count;
+                    BroadcastHandler[] newArr = new BroadcastHandler[keepCount];
+                    var write = 0;
+                    var nextIdxPos = 0;
                     int nextRemoveIdx = indexes[nextIdxPos];
 
-                    for (int read = 0; read < oldArr.Length; read++)
+                    for(var read = 0; read < oldArr.Length; read++)
                     {
-                        if (read == nextRemoveIdx)
+                        if(read == nextRemoveIdx)
                         {
                             removedList.Add(oldArr[read]);
                             nextIdxPos++;
-                            if (nextIdxPos < indexes.Count) nextRemoveIdx = indexes[nextIdxPos];
+                            if(nextIdxPos < indexes.Count) nextRemoveIdx = indexes[nextIdxPos];
                             continue;
                         }
 
@@ -432,24 +448,13 @@ namespace CFramework.Core.BroadcastSystem
                     _listeners[broadcastType] = newArr;
                 }
 
-                if (removedList != null)
+                if(removedList != null)
                 {
-                    foreach (var h in removedList) _pool.Return(h);
+                    foreach (BroadcastHandler h in removedList) _pool.Return(h);
                 }
             }
         }
 
         #endregion
-
-        public async UniTask DisposeAsync()
-        {
-            if (_disposed) return;
-            _disposed = true;
-            _listeners.Clear();
-            _locks.Clear();
-            _pool.Dispose();
-            _logger.LogInfo("广播管理异步卸载完成!");
-            await UniTask.CompletedTask;
-        }
     }
 }

@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Threading;
 using System.Reflection;
+using System.Threading;
 using CFramework.Core.Interfaces;
 using CFramework.Core.Log;
 using Cysharp.Threading.Tasks;
@@ -16,6 +16,21 @@ namespace CFramework.Core.BroadcastSystem
         // 记录原始注册来源（用于 Attribute 注册的精确反注册）
         public object SourceTarget { get; internal set; }
         public MethodInfo SourceMethod { get; internal set; }
+
+        public int CompareTo(BroadcastHandler other)
+        {
+            return Priority.CompareTo(other.Priority);
+        }
+
+        public void Dispose()
+        {
+            Clear();
+        }
+
+        public void OnReturn()
+        {
+            Clear();
+        }
 
         public async UniTask Invoke(IBroadcastData broadcastData, CFLogger logger, CancellationToken ct)
         {
@@ -33,7 +48,7 @@ namespace CFramework.Core.BroadcastSystem
         {
             try
             {
-                switch (Handler)
+                switch(Handler)
                 {
                     case Func<IBroadcastData, CancellationToken, UniTask> funcTaskWithCt:
                         await funcTaskWithCt.Invoke(broadcastData, ct);
@@ -63,11 +78,5 @@ namespace CFramework.Core.BroadcastSystem
             SourceTarget = null;
             SourceMethod = null;
         }
-
-        public void Dispose() => Clear();
-
-        public void OnReturn() => Clear();
-
-        public int CompareTo(BroadcastHandler other) => Priority.CompareTo(other.Priority);
     }
 }

@@ -4,10 +4,10 @@ namespace CFramework.Core.Log
 {
     public class LogManager
     {
-        private readonly ConcurrentDictionary<string, CFLogger> _loggerDict = new();
+        private readonly ConcurrentDictionary<string, CFLogger> _loggerDict = new ConcurrentDictionary<string, CFLogger>();
         public readonly CFLogger CFLogger = new CFLogger(nameof(CFramework));
-        private volatile ICFLogger.Level _level = ICFLogger.Level.Debug;
         private volatile bool _enabled = true;
+        private volatile ICFLogger.Level _level = ICFLogger.Level.Debug;
 
         public ICFLogger.Level Level => _level;
         public bool Enabled => _enabled;
@@ -32,11 +32,11 @@ namespace CFramework.Core.Log
 
         public void SetLevel(string tag, ICFLogger.Level level)
         {
-            if (_loggerDict.TryGetValue(tag, out var logger))
+            if(_loggerDict.TryGetValue(tag, out CFLogger logger))
             {
                 logger.SetLevel(level);
             }
-            else if (tag.Equals(nameof(CFramework)))
+            else if(tag.Equals(nameof(CFramework)))
             {
                 CFLogger.SetLevel(level);
             }
@@ -54,11 +54,11 @@ namespace CFramework.Core.Log
 
         public void SetEnabled(string tag, bool enabled)
         {
-            if (_loggerDict.TryGetValue(tag, out var logger))
+            if(_loggerDict.TryGetValue(tag, out CFLogger logger))
             {
                 logger.SetEnabled(enabled);
             }
-            else if (tag.Equals(nameof(CFramework)))
+            else if(tag.Equals(nameof(CFramework)))
             {
                 CFLogger.SetEnabled(enabled);
             }
@@ -76,11 +76,11 @@ namespace CFramework.Core.Log
 
         public CFLogger GetLogger(string tag)
         {
-            if (tag.Equals(nameof(CFramework)))
+            if(tag.Equals(nameof(CFramework)))
             {
                 return CFLogger;
             }
-            _loggerDict.TryGetValue(tag, out var logger);
+            _loggerDict.TryGetValue(tag, out CFLogger logger);
             return logger;
         }
 

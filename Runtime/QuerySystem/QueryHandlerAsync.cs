@@ -10,12 +10,27 @@ namespace CFramework.Core.QuerySystem
     {
         public Delegate Handler { get; private set; }
 
+        public void OnReturn()
+        {
+            Clear();
+        }
+
+        public void Dispose()
+        {
+            Clear();
+        }
+
+        public void Set(Delegate handler)
+        {
+            Handler = handler;
+        }
+
         public async UniTask<TResult> InvokeAsync<TQuery, TResult>(TQuery query, CFLogger logger, CancellationToken ct)
             where TQuery : IQueryData
         {
             try
             {
-                switch (Handler)
+                switch(Handler)
                 {
                     case Func<TQuery, CancellationToken, UniTask<TResult>> asyncFuncWithCt:
                         return await asyncFuncWithCt.Invoke(query, ct);
@@ -37,12 +52,9 @@ namespace CFramework.Core.QuerySystem
             }
         }
 
-        public void Set(Delegate handler) => Handler = handler;
-
-        private void Clear() => Handler = null;
-
-        public void OnReturn() => Clear();
-
-        public void Dispose() => Clear();
+        private void Clear()
+        {
+            Handler = null;
+        }
     }
 }

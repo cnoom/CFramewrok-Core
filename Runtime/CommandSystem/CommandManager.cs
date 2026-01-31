@@ -1,33 +1,32 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Reflection;
-using Cysharp.Threading.Tasks;
-using CFramework.Core;
 using System.Threading;
 using CFramework.Core.Attributes;
 using CFramework.Core.Execution;
 using CFramework.Core.Log;
 using CFramework.Core.Utilities;
+using Cysharp.Threading.Tasks;
 
 namespace CFramework.Core.CommandSystem
 {
     public class CommandManager
     {
         // 并发安全的处理器表：命令类型 -> 处理器
-        private readonly ConcurrentDictionary<Type, CommandHandler> _handlers = new();
+        private readonly ConcurrentDictionary<Type, CommandHandler> _handlers = new ConcurrentDictionary<Type, CommandHandler>();
 
         private readonly CFLogger _logger;
-        private readonly CFExecutionOptions _options;
-
-        // 对象池（若 CFPool 非线程安全，通过锁保护）
-        private readonly CFPool<CommandHandler> _pool = new(() => new CommandHandler(), maxCapacity: 128, prewarm: 8);
-        private readonly object _poolLock = new();
-
-        public bool EnsureMainThread { get; set; } = true;
 
         // 主线程 ID 与一次性处置标记
         private readonly int _mainThreadId;
-        private int _disposedFlag = 0; // 0=未处置, 1=已处置
+        private readonly CFExecutionOptions _options;
+
+        // 对象池（若 CFPool 非线程安全，通过锁保护）
+        private readonly CFPool<CommandHandler> _pool = new CFPool<CommandHandler>(() => new CommandHandler(), maxCapacity: 128, prewarm: 8);
+        private readonly object _poolLock = new object();
+        private int _disposedFlag; // 0=未处置, 1=已处置
 
         public CommandManager(CFLogger logger, CFExecutionOptions options = null)
         {
@@ -36,15 +35,17 @@ namespace CFramework.Core.CommandSystem
             _mainThreadId = Thread.CurrentThread.ManagedThreadId; // 假定在主线程构造
         }
 
+        public bool EnsureMainThread { get; set; } = true;
+
         private void ThrowIfDisposed()
         {
-            if (Volatile.Read(ref _disposedFlag) != 0)
+            if(Volatile.Read(ref _disposedFlag) != 0)
                 throw new ObjectDisposedException(nameof(CommandManager));
         }
 
         private void EnsureOnMainThread()
         {
-            if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
+            if(Thread.CurrentThread.ManagedThreadId != _mainThreadId)
                 throw new InvalidOperationException("该操作必须在主线程执行。");
         }
 
@@ -54,21 +55,21 @@ namespace CFramework.Core.CommandSystem
         {
             ThrowIfDisposed();
 
-            var commandType = typeof(TCommand);
-            if (!_handlers.TryGetValue(commandType, out var handler))
+            Type commandType = typeof(TCommand);
+            if(!_handlers.TryGetValue(commandType, out CommandHandler handler))
             {
                 _logger.LogWarning($"未找到命令处理器: {commandType.Name}\n{commandData}");
                 return;
             }
 
-            using var context = new CFExecutionContext(_options, ct, _options.OverallTimeout);
-            var startTs = DateTime.UtcNow;
+            using CFExecutionContext context = new CFExecutionContext(_options, ct, _options.OverallTimeout);
+            DateTime startTs = DateTime.UtcNow;
             _logger.LogDebug($"[Command-Start] type={commandType.Name} data={commandData}");
 
-            if (context.CancellationToken.IsCancellationRequested) return;
+            if(context.CancellationToken.IsCancellationRequested) return;
 
             // 仅在真正调用处理器前切回主线程
-            if (EnsureMainThread)
+            if(EnsureMainThread)
                 await UniTask.SwitchToMainThread();
 
             try
@@ -78,7 +79,6 @@ namespace CFramework.Core.CommandSystem
             catch (OperationCanceledException)
             {
                 _logger.LogDebug($"[Command-Canceled] type={commandType.Name} data={commandData}");
-                return;
             }
             catch (Exception e)
             {
@@ -86,10 +86,40 @@ namespace CFramework.Core.CommandSystem
             }
             finally
             {
-                var dur = (DateTime.UtcNow - startTs).TotalMilliseconds;
+                double dur = (DateTime.UtcNow - startTs).TotalMilliseconds;
                 _logger.LogDebug(
                     $"[Command-End] type={commandType.Name} data={commandData}durationMs={dur:F1}");
             }
+        }
+
+        #endregion
+
+        #region 释放
+
+        public async UniTask DisposeAsync()
+        {
+            if(Interlocked.Exchange(ref _disposedFlag, 1) == 1)
+                return;
+
+            // 并发安全地清理所有处理器并归还池对象
+            foreach (KeyValuePair<Type, CommandHandler> kv in _handlers)
+            {
+                if(_handlers.TryRemove(kv.Key, out CommandHandler handler))
+                {
+                    lock (_poolLock)
+                    {
+                        _pool.Return(handler);
+                    }
+                }
+            }
+
+            lock (_poolLock)
+            {
+                _pool.Dispose();
+            }
+
+            _logger.LogDebug("命令管理异步卸载完成!");
+            await UniTask.CompletedTask;
         }
 
         #endregion
@@ -102,7 +132,7 @@ namespace CFramework.Core.CommandSystem
             ThrowIfDisposed();
             EnsureOnMainThread();
 
-            var commandType = typeof(TCommand);
+            Type commandType = typeof(TCommand);
             Subscribe(commandType, handler);
         }
 
@@ -114,19 +144,23 @@ namespace CFramework.Core.CommandSystem
             // 从池获取并设置
             CommandHandler commandHandler;
             lock (_poolLock)
+            {
                 commandHandler = _pool.Get();
+            }
             commandHandler.Set(@delegate);
 
-            if (!_handlers.TryAdd(commandType, commandHandler))
+            if(!_handlers.TryAdd(commandType, commandHandler))
             {
                 _logger.LogWarning(
                     $"命令处理器已存在: {commandType.Name}\noldHandler={_handlers[commandType].Handler.Target.GetType().Name}\nnewHandler={commandHandler.Handler.Target.GetType().Name}");
 
                 // 先移除并回收旧的handler
-                if (_handlers.TryRemove(commandType, out var oldHandler))
+                if(_handlers.TryRemove(commandType, out CommandHandler oldHandler))
                 {
                     lock (_poolLock)
+                    {
                         _pool.Return(oldHandler);
+                    }
                 }
 
                 // 再添加新的handler
@@ -151,10 +185,12 @@ namespace CFramework.Core.CommandSystem
             ThrowIfDisposed();
             EnsureOnMainThread();
 
-            if (_handlers.TryRemove(commandType, out var handler))
+            if(_handlers.TryRemove(commandType, out CommandHandler handler))
             {
                 lock (_poolLock)
+                {
                     _pool.Return(handler);
+                }
             }
         }
 
@@ -167,32 +203,32 @@ namespace CFramework.Core.CommandSystem
             ThrowIfDisposed();
             EnsureOnMainThread();
 
-            if (commandHandler == null) throw new ArgumentNullException(nameof(commandHandler));
+            if(commandHandler == null) throw new ArgumentNullException(nameof(commandHandler));
 
-            var type = commandHandler.GetType();
-            var methods = ReflectUtil.GetAllInstanceMethods(type);
+            Type type = commandHandler.GetType();
+            MethodInfo[] methods = ReflectUtil.GetAllInstanceMethods(type);
 
-            foreach (var method in methods)
+            foreach (MethodInfo method in methods)
             {
-                var attr = method.GetCustomAttribute<CommandHandlerAttribute>(inherit: true);
-                if (attr == null) continue;
-                if (method.IsAbstract) continue;
+                CommandHandlerAttribute attr = method.GetCustomAttribute<CommandHandlerAttribute>(true);
+                if(attr == null) continue;
+                if(method.IsAbstract) continue;
 
-                var parameters = method.GetParameters();
-                var commandType = parameters.Length > 0 ? parameters[0].ParameterType : null;
-                var returnType = method.ReturnType;
+                ParameterInfo[] parameters = method.GetParameters();
+                Type commandType = parameters.Length > 0 ? parameters[0].ParameterType : null;
+                Type returnType = method.ReturnType;
 
                 // 命令处理器必须接收 (ICommandData, CancellationToken) 参数并返回 UniTask
-                if (parameters.Length != 2 ||
-                    !typeof(ICommandData).IsAssignableFrom(commandType) ||
-                    parameters[1].ParameterType != typeof(CancellationToken))
+                if(parameters.Length != 2 ||
+                   !typeof(ICommandData).IsAssignableFrom(commandType) ||
+                   parameters[1].ParameterType != typeof(CancellationToken))
                 {
                     _logger.LogError(
                         $"类型 {commandHandler.GetType().Name} 方法 {method.Name} 签名无效，必须接收 (ICommandData, CancellationToken) 参数。");
                     continue;
                 }
 
-                if (returnType != typeof(UniTask))
+                if(returnType != typeof(UniTask))
                 {
                     _logger.LogError(
                         $"类型 {commandHandler.GetType().Name} 方法 {method.Name} 必须返回 UniTask，已忽略注册。");
@@ -200,39 +236,42 @@ namespace CFramework.Core.CommandSystem
                 }
 
                 // 统一构建强类型原始委托 + 适配器，避免调用期反射与 DynamicInvoke
-                var expected = parameters[0].ParameterType;
+                Type expected = parameters[0].ParameterType;
 
                 // 原始强类型委托：Func<TConcrete, CancellationToken, UniTask>
-                var funcType =
+                Type funcType =
                     typeof(Func<,,>).MakeGenericType(expected, typeof(CancellationToken), typeof(UniTask));
-                var original = method.CreateDelegate(funcType, commandHandler);
+                Delegate original = method.CreateDelegate(funcType, commandHandler);
 
                 // 适配器：Func<ICommandData, CancellationToken, UniTask>
-                var dParam = System.Linq.Expressions.Expression.Parameter(typeof(ICommandData), "d");
-                var ctParam = System.Linq.Expressions.Expression.Parameter(typeof(CancellationToken), "ct");
-                var castD = System.Linq.Expressions.Expression.Convert(dParam, expected);
-                var originalConst = System.Linq.Expressions.Expression.Constant(original);
-                var invokeExpr = System.Linq.Expressions.Expression.Invoke(originalConst, castD, ctParam);
+                ParameterExpression dParam = Expression.Parameter(typeof(ICommandData), "d");
+                ParameterExpression ctParam = Expression.Parameter(typeof(CancellationToken), "ct");
+                UnaryExpression castD = Expression.Convert(dParam, expected);
+                ConstantExpression originalConst = Expression.Constant(original);
+                InvocationExpression invokeExpr = Expression.Invoke(originalConst, castD, ctParam);
 
                 // 包一层 d is T t 校验，避免无意义的 InvalidCastException
-                var tVar = System.Linq.Expressions.Expression.Variable(expected, "t");
-                var assignT = System.Linq.Expressions.Expression.Assign(tVar,
-                    System.Linq.Expressions.Expression.Convert(dParam, expected));
+                ParameterExpression tVar = Expression.Variable(expected, "t");
+                BinaryExpression assignT = Expression.Assign(tVar,
+                    Expression.Convert(dParam, expected));
                 // 为了显式错误，使用条件表达式：如果不是期望类型，抛异常
-                var condition = System.Linq.Expressions.Expression.Condition(
-                    System.Linq.Expressions.Expression.TypeIs(dParam, expected),
+                ConditionalExpression condition = Expression.Condition(
+                    Expression.TypeIs(dParam, expected),
                     invokeExpr,
-                    System.Linq.Expressions.Expression.Throw(
-                        System.Linq.Expressions.Expression.New(
-                            typeof(ArgumentException).GetConstructor(new[] { typeof(string) }),
-                            System.Linq.Expressions.Expression.Constant(
+                    Expression.Throw(
+                        Expression.New(
+                            typeof(ArgumentException).GetConstructor(new[]
+                            {
+                                typeof(string)
+                            }),
+                            Expression.Constant(
                                 $"命令数据类型不匹配，期望 {expected.Name}，实际 {nameof(ICommandData)}")
                         ),
                         typeof(UniTask)
                     )
                 );
 
-                Delegate @delegate = System.Linq.Expressions.Expression
+                Delegate @delegate = Expression
                     .Lambda<Func<ICommandData, CancellationToken, UniTask>>(condition, dParam, ctParam).Compile();
 
                 // 统一交给 Subscribe，后续 CommandHandler 中的 switch 将稳定命中
@@ -245,32 +284,32 @@ namespace CFramework.Core.CommandSystem
             ThrowIfDisposed();
             EnsureOnMainThread();
 
-            if (commandHandler == null) throw new ArgumentNullException(nameof(commandHandler));
+            if(commandHandler == null) throw new ArgumentNullException(nameof(commandHandler));
 
-            var type = commandHandler.GetType();
-            var methods = ReflectUtil.GetAllInstanceMethods(type);
-            foreach (var method in methods)
+            Type type = commandHandler.GetType();
+            MethodInfo[] methods = ReflectUtil.GetAllInstanceMethods(type);
+            foreach (MethodInfo method in methods)
             {
-                var attr = method.GetCustomAttribute<CommandHandlerAttribute>(inherit: true);
-                if (attr == null) continue;
-                if (method.IsAbstract) continue;
+                CommandHandlerAttribute attr = method.GetCustomAttribute<CommandHandlerAttribute>(true);
+                if(attr == null) continue;
+                if(method.IsAbstract) continue;
 
-                var parameters = method.GetParameters();
-                if (parameters.Length != 2)
+                ParameterInfo[] parameters = method.GetParameters();
+                if(parameters.Length != 2)
                 {
                     _logger.LogError($"类型 {commandHandler.GetType().Name} 方法 {method.Name} 签名无效，它需要 2 个参数。");
                     continue;
                 }
 
-                var commandType = parameters[0].ParameterType;
-                if (!typeof(ICommandData).IsAssignableFrom(commandType))
+                Type commandType = parameters[0].ParameterType;
+                if(!typeof(ICommandData).IsAssignableFrom(commandType))
                 {
                     _logger.LogError(
                         $"类型 {commandHandler.GetType().Name} 方法 {method.Name} 的第一个参数类型无效，必须是 {nameof(ICommandData)} 的子类型。");
                     continue;
                 }
 
-                if (parameters.Length == 2 && parameters[1].ParameterType != typeof(CancellationToken))
+                if(parameters.Length == 2 && parameters[1].ParameterType != typeof(CancellationToken))
                 {
                     _logger.LogError(
                         $"类型 {commandHandler.GetType().Name} 方法 {method.Name} 的第二个参数必须是 {nameof(CancellationToken)}。");
@@ -279,34 +318,6 @@ namespace CFramework.Core.CommandSystem
 
                 UnSubscribe(commandType);
             }
-        }
-
-        #endregion
-
-        #region 释放
-
-        public async UniTask DisposeAsync()
-        {
-            if (Interlocked.Exchange(ref _disposedFlag, 1) == 1)
-                return;
-
-            // 并发安全地清理所有处理器并归还池对象
-            foreach (var kv in _handlers)
-            {
-                if (_handlers.TryRemove(kv.Key, out var handler))
-                {
-                    lock (_poolLock)
-                        _pool.Return(handler);
-                }
-            }
-
-            lock (_poolLock)
-            {
-                _pool.Dispose();
-            }
-
-            _logger.LogDebug("命令管理异步卸载完成!");
-            await UniTask.CompletedTask;
         }
 
         #endregion

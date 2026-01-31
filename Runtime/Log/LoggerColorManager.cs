@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
 using UnityEngine;
@@ -6,37 +7,37 @@ namespace CFramework.Core.Log
 {
     public static class LoggerColorManager
     {
-        private static ConcurrentDictionary<string, Color> _customTagColors = new();
-        private static readonly object _lock = new();
-        private static bool _initialized = false;
+        private static ConcurrentDictionary<string, Color> _customTagColors = new ConcurrentDictionary<string, Color>();
+        private static readonly object _lock = new object();
+        private static bool _initialized;
         private static Color _defaultTagColor = new Color(0.7f, 0.7f, 0.9f);
         private static bool _enableTagColor = true;
 
         public static void Initialize(object config)
         {
-            if (config == null) return;
+            if(config == null) return;
 
             try
             {
                 // 通过反射获取配置，避免程序集依赖
-                var loggerConfig = GetPropertyValue(config, "loggerConfig");
-                var colorConfig = GetPropertyValue(loggerConfig, "colorConfig");
-                var customTagColors = GetPropertyValue(colorConfig, "customTagColors") as System.Collections.IEnumerable;
+                object loggerConfig = GetPropertyValue(config, "loggerConfig");
+                object colorConfig = GetPropertyValue(loggerConfig, "colorConfig");
+                IEnumerable customTagColors = GetPropertyValue(colorConfig, "customTagColors") as IEnumerable;
                 var enableTagColor = (bool)GetPropertyValue(colorConfig, "enableTagColor");
-                var tagColor = (Color)GetPropertyValue(colorConfig, "tagColor");
+                Color tagColor = (Color)GetPropertyValue(colorConfig, "tagColor");
 
-                var newCustomTagColors = new ConcurrentDictionary<string, Color>();
+                ConcurrentDictionary<string, Color> newCustomTagColors = new ConcurrentDictionary<string, Color>();
 
-                if (customTagColors != null)
+                if(customTagColors != null)
                 {
-                    foreach (var customColor in customTagColors)
+                    foreach (object customColor in customTagColors)
                     {
-                        if (customColor != null)
+                        if(customColor != null)
                         {
                             var tag = (string)GetPropertyValue(customColor, "tag");
-                            var color = (Color)GetPropertyValue(customColor, "color");
+                            Color color = (Color)GetPropertyValue(customColor, "color");
 
-                            if (!string.IsNullOrEmpty(tag))
+                            if(!string.IsNullOrEmpty(tag))
                             {
                                 newCustomTagColors[tag] = color;
                             }
@@ -60,7 +61,7 @@ namespace CFramework.Core.Log
 
         private static object GetPropertyValue(object obj, string propertyName)
         {
-            var property = obj.GetType().GetProperty(propertyName,
+            PropertyInfo property = obj.GetType().GetProperty(propertyName,
                 BindingFlags.Public | BindingFlags.Instance);
             return property?.GetValue(obj);
         }
@@ -80,10 +81,10 @@ namespace CFramework.Core.Log
                 defaultTagColor = _defaultTagColor;
             }
 
-            if (!initialized || !enableTagColor)
+            if(!initialized || !enableTagColor)
                 return Color.white;
 
-            if (customTagColors.TryGetValue(tag, out var customColor))
+            if(customTagColors.TryGetValue(tag, out Color customColor))
             {
                 return customColor;
             }
