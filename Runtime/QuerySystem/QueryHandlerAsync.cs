@@ -26,7 +26,7 @@ namespace CFramework.Core.QuerySystem
         }
 
         public async UniTask<TResult> InvokeAsync<TQuery, TResult>(TQuery query, CFLogger logger, CancellationToken ct)
-            where TQuery : IQueryData
+            where TQuery : IQueryData<TResult>
         {
             try
             {

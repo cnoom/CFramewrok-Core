@@ -571,10 +571,26 @@ namespace CFramework.Core
         /// <returns>包含查询结果的异步任务。</returns>
         public static async UniTask<TResult> Query<TQuery, TResult>(TQuery query = default,
             CancellationToken? ct = null)
-            where TQuery : IQueryData
+            where TQuery : IQueryData<TResult>
         {
             if(IsInitialized)
                 return await _instance.QueryManager.Query<TQuery, TResult>(query,
+                    LinkedToken(CancellationToken, ct ?? CancellationToken.None));
+            EnsureInitializedOrWarn(nameof(Query));
+            return default;
+        }
+
+        /// <summary>
+        /// 执行查询并返回结果（从 IQueryData<TResult> 推断结果类型）。
+        /// </summary>
+        /// <typeparam name="TResult">查询结果类型。</typeparam>
+        /// <param name="query">要执行的查询实例。</param>
+        /// <param name="ct">可选的取消令牌。</param>
+        public static async UniTask<TResult> Query<TResult>(IQueryData<TResult> query,
+            CancellationToken? ct = null)
+        {
+            if (IsInitialized)
+                return await _instance.QueryManager.Query(query,
                     LinkedToken(CancellationToken, ct ?? CancellationToken.None));
             EnsureInitializedOrWarn(nameof(Query));
             return default;
@@ -588,7 +604,7 @@ namespace CFramework.Core
         /// <param name="subscribe">一个委托，用于定义如何处理 TQuery 类型的查询并返回 TResult 类型的结果。</param>
         public static void SubscribeQuery<TQuery, TResult>(
             Func<TQuery, CancellationToken, UniTask<TResult>> subscribe)
-            where TQuery : IQueryData
+            where TQuery : IQueryData<TResult>
         {
             if(!IsInitialized)
             {
@@ -604,7 +620,7 @@ namespace CFramework.Core
         /// </summary>
         /// <typeparam name="TQuery">要取消订阅的查询类型，必须实现 IQueryData 接口。</typeparam>
         /// <typeparam name="TResult">查询结果的类型。</typeparam>
-        public static void UnsubscribeQuery<TQuery, TResult>() where TQuery : IQueryData
+        public static void UnsubscribeQuery<TQuery, TResult>() where TQuery : IQueryData<TResult>
         {
             if(!IsInitialized)
             {
@@ -635,7 +651,18 @@ namespace CFramework.Core
         /// <typeparam name="TQuery">查询类型，必须实现 IQueryData 接口。</typeparam>
         /// <typeparam name="TResult">查询结果的类型。</typeparam>
         /// <param name="query">要使缓存失效的查询实例。</param>
-        public static void InvalidateCache<TQuery, TResult>(TQuery query) where TQuery : IQueryData
+        public static void InvalidateCache<TResult>(IQueryData<TResult> query)
+        {
+            if (!IsInitialized)
+            {
+                EnsureInitializedOrWarn(nameof(InvalidateCache));
+                return;
+            }
+
+            _instance.QueryManager.InvalidateCache(query);
+        }
+
+        public static void InvalidateCache<TQuery, TResult>(TQuery query) where TQuery : IQueryData<TResult>
         {
             if(!IsInitialized)
             {
