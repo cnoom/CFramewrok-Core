@@ -134,7 +134,7 @@ namespace CFramework.Core
             }
             catch
             {
-                // 忽略释放异常
+                Debug.LogWarning("CF 自动跟踪的 CTS 被取消或框架销毁时发生异常，请检查是否存在内存泄漏。");
             }
         }
 
