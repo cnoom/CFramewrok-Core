@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEngine;
 
 namespace CFramework.Core.Editor.Utilities
 {
@@ -12,7 +13,7 @@ namespace CFramework.Core.Editor.Utilities
         {
             if(string.IsNullOrEmpty(folderPath) || !folderPath.StartsWith("Assets", StringComparison.Ordinal))
             {
-                EditorLogUtility.LogWarning($"EnsureFolder 路径非法: {folderPath}");
+                Debug.LogWarning($"EnsureFolder 路径非法: {folderPath}");
                 return;
             }
 
@@ -26,11 +27,11 @@ namespace CFramework.Core.Editor.Utilities
 
                 if(!AssetDatabase.IsValidFolder(nextPath) && !_CreatedFolders.Contains(nextPath))
                 {
-                    EditorLogUtility.LogInfo($"创建文件夹: {nextPath}");
+                    Debug.Log($"创建文件夹: {nextPath}");
                     string guid = AssetDatabase.CreateFolder(currentPath, folders[i]);
                     if(string.IsNullOrEmpty(guid))
                     {
-                        EditorLogUtility.LogError($"创建文件夹失败: {nextPath}");
+                        Debug.LogError($"创建文件夹失败: {nextPath}");
                         return;
                     }
                     _CreatedFolders.Add(nextPath);
